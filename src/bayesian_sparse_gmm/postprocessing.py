@@ -13,19 +13,13 @@ def align_labels(states: List[SamplerState]) -> List[SamplerState]:
     if not states:
         return states
         
-    # Use the last state as the reference
-    ref_mu = states[-1].mu
+    ref_idx = int(np.argmax([np.std(s.w) for s in states]))
+    ref_mu = states[ref_idx].mu
     K_max = ref_mu.shape[0]
     
     for state in states:
-        # Compute cost matrix: squared Euclidean distance between means
-        # state.mu is (K_max, p), ref_mu is (K_max, p)
-        # diff is (K_max, K_max, p)
         diff = state.mu[:, np.newaxis, :] - ref_mu[np.newaxis, :, :]
         cost_matrix = np.sum(diff ** 2, axis=2)
-        
-        # row_ind corresponds to indices in state.mu
-        # col_ind corresponds to indices in ref_mu
         row_ind, col_ind = linear_sum_assignment(cost_matrix)
         
         new_mu = np.empty_like(state.mu)

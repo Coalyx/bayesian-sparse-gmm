@@ -28,7 +28,15 @@ class GibbsSampler:
             )
             kmeans.fit(X)
             z = kmeans.labels_
-            mu = kmeans.cluster_centers_
+            mu = kmeans.cluster_centers_.copy()
+            
+            # Shrink cluster centers to avoid the initialization vicious cycle.
+            sum_abs_mu = np.sum(np.abs(mu), axis=0)
+            S_init_mean = np.mean(sum_abs_mu)
+            target_S = 0.5
+            if S_init_mean > target_S:
+                mu = mu * (target_S / S_init_mean)
+
         except Exception:
             z = rng.choice(K_max, size=n)
             mu = rng.normal(size=(K_max, p))

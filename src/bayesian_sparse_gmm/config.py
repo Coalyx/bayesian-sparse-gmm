@@ -8,7 +8,7 @@ class HyperParams:
     lambda_1: float = 0.1
     alpha: float = 0.01
     a: float = 1.0
-    b: float = 100.0
+    b: float = 1000.0
 
 @dataclass(frozen=True)
 class SamplerConfig:

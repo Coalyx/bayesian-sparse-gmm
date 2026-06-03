@@ -76,7 +76,6 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         """Fit the GMM model using Gibbs sampling."""
         X = check_array(X, dtype=[np.float64, np.float32])
         
-        # Build configuration and hyperparameter objects
         config = SamplerConfig(
             K_max=self.K_max,
             n_iter=self.n_iter,
@@ -95,23 +94,19 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
             b=self.b,
         )
         
-        # Instantiate backend and sampler
         self.backend_ = select_backend(config.backend)
         sampler = GibbsSampler(config, hyperparams, self.backend_)
         
-        # Run sampler
         self.states_ = sampler.run(X, seed=self.random_state)
         
         from .postprocessing import align_labels
         self.states_ = align_labels(self.states_)
         
-        # Compute and cache point estimates
         self.w_ = np.mean([state.w for state in self.states_], axis=0)
         self.means_ = np.mean([state.mu for state in self.states_], axis=0)
         self.feature_probabilities_ = np.mean([state.gamma for state in self.states_], axis=0)
         self.selected_features_ = np.where(self.feature_probabilities_ > 0.5)[0]
         
-        # Compute MAP labels via mode of z samples
         z_samples = np.array([state.z for state in self.states_])
         labels = np.empty(X.shape[0], dtype=int)
         for i in range(X.shape[0]):
