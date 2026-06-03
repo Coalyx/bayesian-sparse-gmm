@@ -4,11 +4,11 @@ from typing import Optional
 @dataclass(frozen=True)
 class HyperParams:
     """Hyperparameters for the Bayesian GMM."""
-    lambda_0: float = 100.0
+    lambda_0: float = 1000.0
     lambda_1: float = 0.1
-    alpha: float = 1.0
+    alpha: float = 0.01
     a: float = 1.0
-    b: float = 1.0
+    b: float = 100.0
 
 @dataclass(frozen=True)
 class SamplerConfig:

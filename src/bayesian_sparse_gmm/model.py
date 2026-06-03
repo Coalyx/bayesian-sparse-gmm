@@ -22,12 +22,16 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         Number of burn-in iterations to discard.
     thinning : int, default=1
         Thinning interval for MCMC samples.
-    lambda_0 : float, default=100.0
+    lambda_0 : float, default=1000.0
         Spike prior parameter (large value for sparse features).
     lambda_1 : float, default=0.1
         Slab prior parameter (small value for active features).
-    alpha : float, default=1.0
+    alpha : float, default=0.01
         Dirichlet prior parameter for mixing weights.
+    a : float, default=1.0
+        Beta prior parameter a for sparsity probability.
+    b : float, default=100.0
+        Beta prior parameter b for sparsity probability.
     backend : str, default='auto'
         Computation backend: 'numpy', 'numba', or 'auto'.
     n_jobs : int, default=-1
@@ -44,9 +48,11 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         n_iter: int = 2000,
         burn_in: int = 500,
         thinning: int = 1,
-        lambda_0: float = 100.0,
+        lambda_0: float = 1000.0,
         lambda_1: float = 0.1,
-        alpha: float = 1.0,
+        alpha: float = 0.01,
+        a: float = 1.0,
+        b: float = 100.0,
         backend: str = "auto",
         n_jobs: int = -1,
         random_state: Optional[int] = None,
@@ -59,6 +65,8 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         self.lambda_0 = lambda_0
         self.lambda_1 = lambda_1
         self.alpha = alpha
+        self.a = a
+        self.b = b
         self.backend = backend
         self.n_jobs = n_jobs
         self.random_state = random_state
@@ -83,6 +91,8 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
             lambda_0=self.lambda_0,
             lambda_1=self.lambda_1,
             alpha=self.alpha,
+            a=self.a,
+            b=self.b,
         )
         
         # Instantiate backend and sampler
@@ -91,6 +101,9 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         
         # Run sampler
         self.states_ = sampler.run(X, seed=self.random_state)
+        
+        from .postprocessing import align_labels
+        self.states_ = align_labels(self.states_)
         
         # Compute and cache point estimates
         self.w_ = np.mean([state.w for state in self.states_], axis=0)

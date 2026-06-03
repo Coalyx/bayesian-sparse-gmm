@@ -55,6 +55,8 @@ def _sample_inverse_gaussian_numba(mu_abs, lam, y_noise, u_noise):
     for k in prange(K_max):
         for j in range(p):
             mean = lam[0, j] / (mu_abs[k, j] + 1e-10)
+            if mean > 1e5:
+                mean = 1e5
             sh = lam[0, j] ** 2
             mean2 = mean ** 2
             y = y_noise[k, j]
@@ -119,6 +121,8 @@ def _sample_inverse_gaussian_cuda(mu_abs, lam, y_noise, u_noise, out_tau2):
     if k < K_max:
         for j in range(p):
             mean = lam[0, j] / (mu_abs[k, j] + 1e-10)
+            if mean > 1e5:
+                mean = 1e5
             sh = lam[0, j] ** 2
             mean2 = mean ** 2
             y = y_noise[k, j]

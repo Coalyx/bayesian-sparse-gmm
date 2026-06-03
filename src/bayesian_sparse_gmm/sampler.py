@@ -34,8 +34,8 @@ class GibbsSampler:
             mu = rng.normal(size=(K_max, p))
             
         w = np.ones(K_max) / K_max
-        gamma = np.ones(p, dtype=np.int32)
-        theta = 0.5
+        gamma = rng.binomial(1, 0.1, size=p).astype(np.int32)
+        theta = 0.1
         tau2 = np.ones((K_max, p))
         
         return SamplerState(

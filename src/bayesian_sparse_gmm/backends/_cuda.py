@@ -77,6 +77,7 @@ class CUDABackend(ComputeBackend):
         u_gpu = cp.asarray(u_noise)
         
         inv_mean = lam_gpu / (mu_abs_gpu + 1e-10)
+        inv_mean = cp.minimum(inv_mean, 1e5)
         shape = lam_gpu ** 2
         inv_mean2 = inv_mean ** 2
         

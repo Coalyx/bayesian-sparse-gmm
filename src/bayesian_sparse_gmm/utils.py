@@ -10,6 +10,7 @@ def log_sum_exp(x: np.ndarray, axis: int = -1, keepdims: bool = False) -> np.nda
 
 def sample_inverse_gaussian(mean: np.ndarray, shape: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     """Sample from Inverse Gaussian distribution using Michael et al. (1976)."""
+    mean = np.minimum(mean, 1e5)
     y = rng.normal(size=mean.shape) ** 2
     mean2 = mean ** 2
     term = np.sqrt(np.maximum(0.0, 4.0 * mean * shape * y + mean2 * (y ** 2)))
