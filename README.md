@@ -23,23 +23,8 @@ pip install -e .
 ## Quick Start
 
 ```python
-import numpy as np
-from bayesian_sparse_gmm import BayesianSparseGMM
 
-# Generate some synthetic data
-X = np.concatenate([
-    np.random.normal(0, 1, (100, 2)),
-    np.random.normal(5, 1, (100, 2))
-])
 
-# Initialize model with maximum 10 components
-model = BayesianSparseGMM(n_components=10, alpha_0=0.1)
-
-# Fit the model (to be implemented)
-# model.fit(X)
-
-# Print estimated component weights
-# print(model.weights_)
 ```
 
 ## Development and Testing
