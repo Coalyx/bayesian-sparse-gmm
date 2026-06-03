@@ -55,3 +55,21 @@ Run tests using `pytest`:
 ```bash
 pytest
 ```
+
+## Citation
+
+If you use this project in your research, please cite the following paper:
+
+```bib
+@article{JMLR:v26:23-0142,
+  author  = {Dapeng Yao and Fangzheng Xie and Yanxun Xu},
+  title   = {Bayesian Sparse Gaussian Mixture Model for Clustering in High Dimensions},
+  journal = {Journal of Machine Learning Research},
+  year    = {2025},
+  volume  = {26},
+  number  = {21},
+  pages   = {1--50},
+  url     = {http://jmlr.org/papers/v26/23-0142.html}
+}
+```
+
