@@ -4,9 +4,9 @@ import pytest
 # Skip this entire test module if numba is not installed
 pytest.importorskip("numba")
 
-from bayesian_sparse_gmm.backends._numba import NumbaBackend
-from bayesian_sparse_gmm.backends._numpy import NumpyBackend
-from bayesian_sparse_gmm.model import BayesianSparseGMM
+from bayesian_sparse_gmm.backends._numba import NumbaBackend  # noqa: E402
+from bayesian_sparse_gmm.backends._numpy import NumpyBackend  # noqa: E402
+from bayesian_sparse_gmm.model import BayesianSparseGMM  # noqa: E402
 
 
 def test_numba_backend_equivalence():
