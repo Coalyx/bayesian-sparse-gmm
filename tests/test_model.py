@@ -55,3 +55,15 @@ def test_model_scikit_learn_api():
     # Score
     score = gmm.score(X)
     assert isinstance(score, float)
+
+
+def test_model_custom_theta():
+    X = np.random.normal(size=(20, 3))
+    # Test setting custom theta
+    gmm = BayesianSparseGMM(K_max=3, theta=0.4, n_iter=10, burn_in=2, random_state=42)
+    assert gmm.theta == 0.4
+    gmm.fit(X)
+    assert hasattr(gmm, "states_")
+    for state in gmm.states_:
+        assert state.theta == 0.4
+

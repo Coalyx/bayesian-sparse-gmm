@@ -10,7 +10,7 @@ def test_config():
     assert hp.lambda_0 == 1000.0
     assert hp.lambda_1 == 0.1
     assert hp.alpha == 0.01
-    assert hp.b == 1000.0
+    assert hp.theta == 0.1
     
     cfg = SamplerConfig(K_max=10)
     assert cfg.K_max == 10

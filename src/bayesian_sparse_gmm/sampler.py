@@ -29,21 +29,14 @@ class GibbsSampler:
             kmeans.fit(X)
             z = kmeans.labels_
             mu = kmeans.cluster_centers_.copy()
-            
-            # Shrink cluster centers to avoid the initialization vicious cycle.
-            sum_abs_mu = np.sum(np.abs(mu), axis=0)
-            S_init_mean = np.mean(sum_abs_mu)
-            target_S = 0.5
-            if S_init_mean > target_S:
-                mu = mu * (target_S / S_init_mean)
 
         except Exception:
             z = rng.choice(K_max, size=n)
             mu = rng.normal(size=(K_max, p))
             
         w = np.ones(K_max) / K_max
-        gamma = rng.binomial(1, 0.1, size=p).astype(np.int32)
-        theta = 0.1
+        gamma = np.ones(p, dtype=np.int32)
+        theta = self.hyperparams.theta
         tau2 = np.ones((K_max, p))
         
         return SamplerState(
@@ -56,28 +49,35 @@ class GibbsSampler:
         n, p = X.shape
         hp = self.hyperparams
         
-        # STEP 1: Update cluster mixing weights (w)
-        n_k = np.bincount(state.z, minlength=K_max)
-        w = rng.dirichlet(hp.alpha + n_k)
-        
-        # STEP-2: Update cluster assignments (z)
-        log_w = np.log(np.maximum(w, 1e-15))
+        # STEP 1: Update cluster assignments (z) using the previous mixing weights
+        threshold = 1.0 / (2.0 * n)
+        w_safe = np.where(state.w < threshold, 1e-300, state.w)
+        log_w = np.log(w_safe)
         log_probs = self.backend.compute_cluster_log_probs(X, state.mu, log_w)
         max_log = np.max(log_probs, axis=1, keepdims=True)
         probs = np.exp(log_probs - max_log)
         probs /= np.sum(probs, axis=1, keepdims=True)
         
-        # Vectorized categorical sampling
         cumsum = np.cumsum(probs, axis=1)
         u = rng.uniform(size=(n, 1))
         z = np.sum(cumsum < u, axis=1)
         z = np.clip(z, 0, K_max - 1)
         
-        # STEP 3: Update feature inclusion indicators (gamma)
-        sum_abs_mu = np.sum(np.abs(state.mu), axis=0)
+        # STEP 2: Update cluster mixing weights (w) using the new cluster assignments
+        n_k = np.bincount(z, minlength=K_max)
+        w = rng.dirichlet(hp.alpha + n_k)
         
-        log_laplace_slab = K_max * (np.log(hp.lambda_1) - np.log(2.0)) - hp.lambda_1 * sum_abs_mu
-        log_laplace_spike = K_max * (np.log(hp.lambda_0) - np.log(2.0)) - hp.lambda_0 * sum_abs_mu
+        # STEP 3: Update feature inclusion indicators (gamma) using active cluster mask
+        active_mask = (n_k > 0)
+        active_K = int(np.sum(active_mask))
+        if active_K == 0:
+            active_K = K_max
+            active_mask = np.ones(K_max, dtype=bool)
+
+        sum_abs_mu = np.sum(np.abs(state.mu[active_mask]), axis=0)
+        
+        log_laplace_slab = active_K * (np.log(hp.lambda_1) - np.log(2.0)) - hp.lambda_1 * sum_abs_mu
+        log_laplace_spike = active_K * (np.log(hp.lambda_0) - np.log(2.0)) - hp.lambda_0 * sum_abs_mu
         
         safe_theta = np.clip(state.theta, 1e-15, 1.0 - 1e-15)
         log_P_slab = np.log(safe_theta) + log_laplace_slab
@@ -97,16 +97,12 @@ class GibbsSampler:
         n_k_new, sum_x = self.backend.compute_sufficient_stats(X, z, K_max)
         mu = self.backend.sample_cluster_means(sum_x, n_k_new, tau2, rng)
         
-        # STEP 5: Update sparsity probability (theta)
-        num_active = np.sum(gamma)
-        theta = rng.beta(hp.a + num_active, hp.b + p - num_active)
-        
         return SamplerState(
             z=z,
             w=w,
             mu=mu,
             gamma=gamma,
-            theta=theta,
+            theta=state.theta,
             tau2=tau2,
             iteration=state.iteration + 1
         )

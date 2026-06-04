@@ -28,10 +28,8 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         Slab prior parameter (small value for active features).
     alpha : float, default=0.01
         Dirichlet prior parameter for mixing weights.
-    a : float, default=1.0
-        Beta prior parameter a for sparsity probability.
-    b : float, default=100.0
-        Beta prior parameter b for sparsity probability.
+    theta : float, default=0.1
+        Prior probability of a feature being informative (Slab).
     backend : str, default='auto'
         Computation backend: 'numpy', 'numba', or 'auto'.
     n_jobs : int, default=-1
@@ -51,8 +49,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         lambda_0: float = 1000.0,
         lambda_1: float = 0.1,
         alpha: float = 0.01,
-        a: float = 1.0,
-        b: float = 100.0,
+        theta: float = 0.1,
         backend: str = "auto",
         n_jobs: int = -1,
         random_state: Optional[int] = None,
@@ -65,8 +62,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         self.lambda_0 = lambda_0
         self.lambda_1 = lambda_1
         self.alpha = alpha
-        self.a = a
-        self.b = b
+        self.theta = theta
         self.backend = backend
         self.n_jobs = n_jobs
         self.random_state = random_state
@@ -90,8 +86,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
             lambda_0=self.lambda_0,
             lambda_1=self.lambda_1,
             alpha=self.alpha,
-            a=self.a,
-            b=self.b,
+            theta=self.theta,
         )
         
         self.backend_ = select_backend(config.backend)
@@ -120,9 +115,12 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         X = check_array(X, dtype=[np.float64, np.float32])
         check_is_fitted(self, "states_")
         
+        n = X.shape[0]
+        threshold = 1.0 / (2.0 * n)
         all_probs = []
         for state in self.states_:
-            log_w = np.log(np.maximum(state.w, 1e-15))
+            w_safe = np.where(state.w < threshold, 1e-300, state.w)
+            log_w = np.log(w_safe)
             log_probs = self.backend_.compute_cluster_log_probs(X, state.mu, log_w)
             
             max_log = np.max(log_probs, axis=1, keepdims=True)
@@ -141,12 +139,14 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         X = check_array(X, dtype=[np.float64, np.float32])
         check_is_fitted(self, "states_")
         
-        p = X.shape[1]
+        n, p = X.shape
+        threshold = 1.0 / (2.0 * n)
         const = -0.5 * p * np.log(2.0 * np.pi)
         
         log_liks = []
         for state in self.states_:
-            log_w = np.log(np.maximum(state.w, 1e-15))
+            w_safe = np.where(state.w < threshold, 1e-300, state.w)
+            log_w = np.log(w_safe)
             log_probs = self.backend_.compute_cluster_log_probs(X, state.mu, log_w)
             
             sample_log_lik = log_sum_exp(log_probs, axis=1) + const
