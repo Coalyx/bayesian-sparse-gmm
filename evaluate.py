@@ -1,4 +1,7 @@
 import os
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+
 import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -40,8 +43,9 @@ def run_olivetti_benchmark():
         lambda_0=15.0,
         lambda_1=0.05,
         alpha=0.01,
-        a=1.0,
-        b=1000.0,
+        theta=0.1,
+        a_sigma=1.0,
+        b_sigma=1.0,
         backend="numba",
         random_state=42,
         verbose=1,
@@ -134,8 +138,9 @@ def run_text_benchmark():
         lambda_0=10.0,
         lambda_1=0.05,
         alpha=0.01,
-        a=1.0,
-        b=1000.0,
+        theta=0.1,
+        a_sigma=1.0,
+        b_sigma=1.0,
         backend="numba",
         random_state=42,
         verbose=1,
@@ -180,7 +185,8 @@ def run_synthetic_sparse_benchmark():
     t0 = time.time()
     gmm = BayesianSparseGMM(
         K_max=10, n_iter=500, burn_in=100, thinning=1,
-        lambda_0=10.0, lambda_1=0.05, alpha=0.01, a=1.0, b=1000.0,
+        lambda_0=10.0, lambda_1=0.05, alpha=0.01, theta=0.1,
+        a_sigma=1.0, b_sigma=1.0,
         backend="numba", random_state=42, verbose=1,
     )
     gmm.fit(X)
@@ -249,7 +255,8 @@ def run_digits_benchmark():
     t0 = time.time()
     gmm = BayesianSparseGMM(
         K_max=15, n_iter=600, burn_in=150, thinning=2,
-        lambda_0=10.0, lambda_1=0.05, alpha=0.01, a=1.0, b=1000.0,
+        lambda_0=10.0, lambda_1=0.05, alpha=0.01, theta=0.1,
+        a_sigma=1.0, b_sigma=1.0,
         backend="numba", random_state=42, verbose=1,
     )
     gmm.fit(X)
@@ -331,7 +338,8 @@ def run_wine_benchmark():
     t0 = time.time()
     gmm = BayesianSparseGMM(
         K_max=6, n_iter=500, burn_in=100, thinning=1,
-        lambda_0=10.0, lambda_1=0.05, alpha=0.01, a=1.0, b=1000.0,
+        lambda_0=10.0, lambda_1=0.05, alpha=0.01, theta=0.1,
+        a_sigma=1.0, b_sigma=1.0,
         backend="numba", random_state=42, verbose=1,
     )
     gmm.fit(X)

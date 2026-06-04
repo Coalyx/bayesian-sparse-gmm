@@ -25,17 +25,20 @@ def align_labels(states: List[SamplerState]) -> List[SamplerState]:
         new_mu = np.empty_like(state.mu)
         new_w = np.empty_like(state.w)
         new_tau2 = np.empty_like(state.tau2)
+        new_gamma = np.empty_like(state.gamma)
         new_z = np.empty_like(state.z)
         
         for r, c in zip(row_ind, col_ind):
             new_mu[c] = state.mu[r]
             new_w[c] = state.w[r]
             new_tau2[c] = state.tau2[r]
+            new_gamma[c] = state.gamma[r]
             new_z[state.z == r] = c
             
         state.mu = new_mu
         state.w = new_w
         state.tau2 = new_tau2
+        state.gamma = new_gamma
         state.z = new_z
         
     return states

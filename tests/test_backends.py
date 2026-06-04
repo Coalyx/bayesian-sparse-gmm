@@ -16,7 +16,7 @@ def test_numpy_compute_cluster_log_probs():
     # Row 0: [0.0 - 0.5*0, -1.0 - 0.5*5] = [0.0, -3.5]
     # Row 1: [0.0 - 0.5*8, -1.0 - 0.5*25] = [-4.0, -13.5]
     expected = np.array([[0.0, -3.5], [-4.0, -13.5]])
-    actual = backend.compute_cluster_log_probs(X, mu, log_w)
+    actual = backend.compute_cluster_log_probs(X, mu, log_w, np.ones(2))
     assert np.allclose(actual, expected)
 
 def test_numpy_compute_sufficient_stats():
@@ -48,7 +48,7 @@ def test_numpy_sample_cluster_means():
     # col 1: 20/7 = 2.8571
     samples = []
     for _ in range(10000):
-        samples.append(backend.sample_cluster_means(sum_x, n_k, tau2, rng))
+        samples.append(backend.sample_cluster_means(sum_x, n_k, tau2, np.ones(2), rng))
     
     samples = np.array(samples)
     sample_mean = np.mean(samples, axis=0)

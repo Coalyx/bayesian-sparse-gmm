@@ -15,8 +15,8 @@ def test_numba_backend_equivalence():
     K_max = 2
     
     # 1. compute_cluster_log_probs
-    res_np = numpy_backend.compute_cluster_log_probs(X, mu, log_w)
-    res_nb = numba_backend.compute_cluster_log_probs(X, mu, log_w)
+    res_np = numpy_backend.compute_cluster_log_probs(X, mu, log_w, np.ones(2))
+    res_nb = numba_backend.compute_cluster_log_probs(X, mu, log_w, np.ones(2))
     assert np.allclose(res_np, res_nb)
     
     # 2. compute_sufficient_stats
@@ -31,8 +31,8 @@ def test_numba_backend_equivalence():
     tau2 = np.array([[1.0, 0.5], [2.0, 1.5]])
     
     # Pre-seeding guarantees identical random draws
-    mu_np = numpy_backend.sample_cluster_means(sum_np, n_np, tau2, rng1)
-    mu_nb = numba_backend.sample_cluster_means(sum_nb, n_nb, tau2, rng2)
+    mu_np = numpy_backend.sample_cluster_means(sum_np, n_np, tau2, np.ones(2), rng1)
+    mu_nb = numba_backend.sample_cluster_means(sum_nb, n_nb, tau2, np.ones(2), rng2)
     assert np.allclose(mu_np, mu_nb)
     
     # 4. sample_inverse_gaussian

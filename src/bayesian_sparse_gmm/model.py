@@ -46,10 +46,13 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         n_iter: int = 2000,
         burn_in: int = 500,
         thinning: int = 1,
+        warm_up_iters: int = 50,
         lambda_0: float = 1000.0,
         lambda_1: float = 0.1,
         alpha: float = 0.01,
         theta: float = 0.1,
+        a_sigma: float = 1.0,
+        b_sigma: float = 1.0,
         backend: str = "auto",
         n_jobs: int = -1,
         random_state: Optional[int] = None,
@@ -59,10 +62,13 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         self.n_iter = n_iter
         self.burn_in = burn_in
         self.thinning = thinning
+        self.warm_up_iters = warm_up_iters
         self.lambda_0 = lambda_0
         self.lambda_1 = lambda_1
         self.alpha = alpha
         self.theta = theta
+        self.a_sigma = a_sigma
+        self.b_sigma = b_sigma
         self.backend = backend
         self.n_jobs = n_jobs
         self.random_state = random_state
@@ -77,6 +83,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
             n_iter=self.n_iter,
             burn_in=self.burn_in,
             thinning=self.thinning,
+            warm_up_iters=self.warm_up_iters,
             backend=self.backend,
             n_jobs=self.n_jobs,
             random_state=self.random_state,
@@ -87,6 +94,8 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
             lambda_1=self.lambda_1,
             alpha=self.alpha,
             theta=self.theta,
+            a_sigma=self.a_sigma,
+            b_sigma=self.b_sigma,
         )
         
         self.backend_ = select_backend(config.backend)
@@ -99,14 +108,24 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         
         self.w_ = np.mean([state.w for state in self.states_], axis=0)
         self.means_ = np.mean([state.mu for state in self.states_], axis=0)
-        self.feature_probabilities_ = np.mean([state.gamma for state in self.states_], axis=0)
-        self.selected_features_ = np.where(self.feature_probabilities_ > 0.5)[0]
         
+        # Consolidate local gamma states
+        self.feature_probabilities_2d_ = np.mean([state.gamma for state in self.states_], axis=0)
+        
+        # Final label assignment based on mode over samples
         z_samples = np.array([state.z for state in self.states_])
         labels = np.empty(X.shape[0], dtype=int)
         for i in range(X.shape[0]):
             labels[i] = np.argmax(np.bincount(z_samples[:, i]))
         self.labels_ = labels
+        
+        # Compute 1D feature probabilities for backward compatibility based on active clusters
+        active_clusters = np.unique(self.labels_)
+        if len(active_clusters) > 0:
+            self.feature_probabilities_ = np.max(self.feature_probabilities_2d_[active_clusters], axis=0)
+        else:
+            self.feature_probabilities_ = np.max(self.feature_probabilities_2d_, axis=0)
+        self.selected_features_ = np.where(self.feature_probabilities_ > 0.5)[0]
         
         return self
 
@@ -121,7 +140,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         for state in self.states_:
             w_safe = np.where(state.w < threshold, 1e-300, state.w)
             log_w = np.log(w_safe)
-            log_probs = self.backend_.compute_cluster_log_probs(X, state.mu, log_w)
+            log_probs = self.backend_.compute_cluster_log_probs(X, state.mu, log_w, state.sigma2)
             
             max_log = np.max(log_probs, axis=1, keepdims=True)
             probs = np.exp(log_probs - max_log)
@@ -141,14 +160,14 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         
         n, p = X.shape
         threshold = 1.0 / (2.0 * n)
-        const = -0.5 * p * np.log(2.0 * np.pi)
         
         log_liks = []
         for state in self.states_:
             w_safe = np.where(state.w < threshold, 1e-300, state.w)
             log_w = np.log(w_safe)
-            log_probs = self.backend_.compute_cluster_log_probs(X, state.mu, log_w)
+            log_probs = self.backend_.compute_cluster_log_probs(X, state.mu, log_w, state.sigma2)
             
+            const = -0.5 * p * np.log(2.0 * np.pi) - 0.5 * np.sum(np.log(state.sigma2))
             sample_log_lik = log_sum_exp(log_probs, axis=1) + const
             log_liks.append(np.mean(sample_log_lik))
             
@@ -170,4 +189,5 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
             "mu": np.array([state.mu for state in self.states_]),
             "gamma": np.array([state.gamma for state in self.states_]),
             "theta": np.array([state.theta for state in self.states_]),
+            "sigma2": np.array([state.sigma2 for state in self.states_]),
         }

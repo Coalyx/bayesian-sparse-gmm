@@ -10,4 +10,5 @@ class SamplerState:
     gamma: np.ndarray
     theta: float
     tau2: np.ndarray
+    sigma2: np.ndarray
     iteration: int

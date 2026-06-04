@@ -19,9 +19,10 @@ def test_sampler_initialization():
     assert state.z.shape == (10,)
     assert state.w.shape == (3,)
     assert state.mu.shape == (3, 4)
-    assert state.gamma.shape == (4,)
-    assert np.array_equal(state.gamma, np.ones(4, dtype=np.int32))
+    assert state.gamma.shape == (3, 4)
+    assert np.array_equal(state.gamma, np.ones((3, 4), dtype=np.int32))
     assert state.tau2.shape == (3, 4)
+    assert state.sigma2.shape == (4,)
     assert 0.0 <= state.theta <= 1.0
 
 def test_sampler_step():
@@ -40,8 +41,9 @@ def test_sampler_step():
     assert next_state.z.shape == (10,)
     assert next_state.w.shape == (3,)
     assert next_state.mu.shape == (3, 4)
-    assert next_state.gamma.shape == (4,)
+    assert next_state.gamma.shape == (3, 4)
     assert next_state.tau2.shape == (3, 4)
+    assert next_state.sigma2.shape == (4,)
 
 def test_sampler_run_chain():
     hp = HyperParams()
@@ -61,7 +63,7 @@ def test_sampler_run_chain():
 
 def test_sampler_active_masking():
     hp = HyperParams(lambda_0=10.0, lambda_1=0.1)
-    cfg = SamplerConfig(K_max=4)
+    cfg = SamplerConfig(K_max=4, warm_up_iters=0)
     backend = NumpyBackend()
     sampler = GibbsSampler(cfg, hp, backend)
     
@@ -83,10 +85,12 @@ def test_sampler_active_masking():
     next_state = sampler.sample_step(X, state, rng)
     
     # Under masking, active_K = 1, sum_abs_mu = [1.0, 2.0]
-    # log_laplace_slab = 1 * (log(0.1) - log(2.0)) - 0.1 * [1.0, 2.0] = -3.0957, -3.1957
-    # log_laplace_spike = 1 * (log(10.0) - log(2.0)) - 10.0 * [1.0, 2.0] = -8.3906, -18.3906
-    # So slab probability is close to 1, and both features should be selected.
-    assert np.array_equal(next_state.gamma, [1, 1])
+    # log_laplace_slab = (log(0.1) - log(2.0)) - 0.1 * [1.0, 2.0] = -3.0957, -3.1957
+    # log_laplace_spike = (log(10.0) - log(2.0)) - 10.0 * [1.0, 2.0] = -8.3906, -18.3906
+    # So slab probability is close to 1, and both features should be selected for the active cluster.
+    expected_gamma = np.zeros((4, 2), dtype=np.int32)
+    expected_gamma[0] = [1, 1]
+    assert np.array_equal(next_state.gamma, expected_gamma)
 
 
 def test_hard_thresholding_memberships():
@@ -134,12 +138,13 @@ def test_gibbs_sequence_order():
     z = np.zeros(5, dtype=int)
     w = np.array([1e-15, 1.0 - 2e-15, 1e-15])
     mu = np.zeros((3, 2))
-    gamma = np.ones(2, dtype=np.int32)
+    gamma = np.ones((3, 2), dtype=np.int32)
     theta = 0.5
     tau2 = np.ones((3, 2))
+    sigma2 = np.ones(2)
     
     from bayesian_sparse_gmm.state import SamplerState
-    state = SamplerState(z=z, w=w, mu=mu, gamma=gamma, theta=theta, tau2=tau2, iteration=0)
+    state = SamplerState(z=z, w=w, mu=mu, gamma=gamma, theta=theta, tau2=tau2, sigma2=sigma2, iteration=0)
     
     real_rng = np.random.default_rng(42)
     

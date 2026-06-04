@@ -40,7 +40,9 @@ def test_model_scikit_learn_api():
     assert trace["z"].shape == (15, 50)
     assert trace["mu"].shape == (15, 5, 4)
     assert trace["w"].shape == (15, 5)
-    assert trace["gamma"].shape == (15, 4)
+    assert trace["gamma"].shape == (15, 5, 4)
+    assert "sigma2" in trace
+    assert trace["sigma2"].shape == (15, 4)
     
     # Predict
     labels = gmm.predict(X)

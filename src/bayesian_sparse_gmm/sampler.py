@@ -35,12 +35,13 @@ class GibbsSampler:
             mu = rng.normal(size=(K_max, p))
             
         w = np.ones(K_max) / K_max
-        gamma = np.ones(p, dtype=np.int32)
+        gamma = np.ones((K_max, p), dtype=np.int32)
         theta = self.hyperparams.theta
         tau2 = np.ones((K_max, p))
+        sigma2 = np.ones(p)
         
         return SamplerState(
-            z=z, w=w, mu=mu, gamma=gamma, theta=theta, tau2=tau2, iteration=0
+            z=z, w=w, mu=mu, gamma=gamma, theta=theta, tau2=tau2, sigma2=sigma2, iteration=0
         )
 
     def sample_step(self, X: np.ndarray, state: SamplerState, rng: np.random.Generator) -> SamplerState:
@@ -53,7 +54,7 @@ class GibbsSampler:
         threshold = 1.0 / (2.0 * n)
         w_safe = np.where(state.w < threshold, 1e-300, state.w)
         log_w = np.log(w_safe)
-        log_probs = self.backend.compute_cluster_log_probs(X, state.mu, log_w)
+        log_probs = self.backend.compute_cluster_log_probs(X, state.mu, log_w, state.sigma2)
         max_log = np.max(log_probs, axis=1, keepdims=True)
         probs = np.exp(log_probs - max_log)
         probs /= np.sum(probs, axis=1, keepdims=True)
@@ -74,28 +75,44 @@ class GibbsSampler:
             active_K = K_max
             active_mask = np.ones(K_max, dtype=bool)
 
-        sum_abs_mu = np.sum(np.abs(state.mu[active_mask]), axis=0)
+        gamma = np.zeros((K_max, p), dtype=np.int32)
+        if state.iteration < self.config.warm_up_iters:
+            # During warm-up, force gamma to 1 for all active clusters to allow means to migrate
+            gamma[active_mask] = 1
+        else:
+            # Local feature selection: sample gamma_kj independently for active clusters
+            active_mu = state.mu[active_mask]
+            log_laplace_slab = (np.log(hp.lambda_1) - np.log(2.0)) - hp.lambda_1 * np.abs(active_mu)
+            log_laplace_spike = (np.log(hp.lambda_0) - np.log(2.0)) - hp.lambda_0 * np.abs(active_mu)
+            
+            safe_theta = np.clip(state.theta, 1e-15, 1.0 - 1e-15)
+            log_P_slab = np.log(safe_theta) + log_laplace_slab
+            log_P_spike = np.log(1.0 - safe_theta) + log_laplace_spike
+            
+            max_log = np.maximum(log_P_slab, log_P_spike)
+            prob_slab = np.exp(log_P_slab - max_log)
+            prob_spike = np.exp(log_P_spike - max_log)
+            p_slab = prob_slab / (prob_slab + prob_spike)
+            
+            gamma[active_mask] = rng.binomial(1, p_slab)
+
+        # STEP 3b: Update feature-specific variances (sigma2)
+        # sigma2_j ~ Inverse-Gamma(a_sigma + N / 2, b_sigma + 0.5 * sum_i (X_ij - mu_{Z_i, j})^2)
+        residuals_sq = (X - state.mu[z]) ** 2
+        sum_residuals_sq = np.sum(residuals_sq, axis=0)
         
-        log_laplace_slab = active_K * (np.log(hp.lambda_1) - np.log(2.0)) - hp.lambda_1 * sum_abs_mu
-        log_laplace_spike = active_K * (np.log(hp.lambda_0) - np.log(2.0)) - hp.lambda_0 * sum_abs_mu
+        shape_sig = hp.a_sigma + 0.5 * n
+        scale_sig = 1.0 / (hp.b_sigma + 0.5 * sum_residuals_sq)
         
-        safe_theta = np.clip(state.theta, 1e-15, 1.0 - 1e-15)
-        log_P_slab = np.log(safe_theta) + log_laplace_slab
-        log_P_spike = np.log(1.0 - safe_theta) + log_laplace_spike
-        
-        max_log = np.maximum(log_P_slab, log_P_spike)
-        prob_slab = np.exp(log_P_slab - max_log)
-        prob_spike = np.exp(log_P_spike - max_log)
-        
-        p_slab = prob_slab / (prob_slab + prob_spike)
-        gamma = rng.binomial(1, p_slab)
+        gamma_sig_sample = rng.gamma(shape_sig, scale_sig)
+        sigma2 = 1.0 / np.maximum(gamma_sig_sample, 1e-15)
         
         # STEP 4: Update cluster means (mu) and auxiliary variables (tau2)
-        lam = np.where(gamma == 1, hp.lambda_1, hp.lambda_0)[np.newaxis, :]
+        lam = np.where(gamma == 1, hp.lambda_1, hp.lambda_0)
         tau2 = self.backend.sample_inverse_gaussian(np.abs(state.mu), lam, rng)
         
         n_k_new, sum_x = self.backend.compute_sufficient_stats(X, z, K_max)
-        mu = self.backend.sample_cluster_means(sum_x, n_k_new, tau2, rng)
+        mu = self.backend.sample_cluster_means(sum_x, n_k_new, tau2, sigma2, rng)
         
         return SamplerState(
             z=z,
@@ -104,6 +121,7 @@ class GibbsSampler:
             gamma=gamma,
             theta=state.theta,
             tau2=tau2,
+            sigma2=sigma2,
             iteration=state.iteration + 1
         )
 

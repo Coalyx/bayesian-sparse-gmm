@@ -8,7 +8,7 @@ from ._base import ComputeBackend
 # =====================================================================
 
 @njit(parallel=True, fastmath=True, cache=True)
-def _compute_cluster_log_probs_numba(X, mu, log_w):
+def _compute_cluster_log_probs_numba(X, mu, log_w, sigma2):
     n, p = X.shape
     K_max = mu.shape[0]
     log_probs = np.empty((n, K_max), dtype=X.dtype)
@@ -17,7 +17,7 @@ def _compute_cluster_log_probs_numba(X, mu, log_w):
             dist = 0.0
             for j in range(p):
                 diff = X[i, j] - mu[k, j]
-                dist += diff * diff
+                dist += diff * diff / sigma2[j]
             log_probs[i, k] = log_w[k] - 0.5 * dist
     return log_probs
 
@@ -37,14 +37,14 @@ def _compute_sufficient_stats_numba(X, z, K_max):
     return n_k, sum_x
 
 @njit(parallel=True, fastmath=True, cache=True)
-def _sample_cluster_means_numba(sum_x, n_k, tau2, noise):
+def _sample_cluster_means_numba(sum_x, n_k, tau2, sigma2, noise):
     K_max, p = sum_x.shape
     mu = np.empty((K_max, p), dtype=sum_x.dtype)
     for k in prange(K_max):
         nk = n_k[k]
         for j in range(p):
-            post_var = 1.0 / (nk + 1.0 / tau2[k, j])
-            post_mean = post_var * sum_x[k, j]
+            post_var = 1.0 / (nk / sigma2[j] + 1.0 / tau2[k, j])
+            post_mean = post_var * (sum_x[k, j] / sigma2[j])
             mu[k, j] = post_mean + np.sqrt(post_var) * noise[k, j]
     return mu
 
@@ -77,7 +77,7 @@ def _sample_inverse_gaussian_numba(mu_abs, lam, y_noise, u_noise):
 # =====================================================================
 
 @cuda.jit
-def _compute_cluster_log_probs_cuda(X, mu, log_w, out):
+def _compute_cluster_log_probs_cuda(X, mu, log_w, sigma2, out):
     i = cuda.grid(1)
     n = X.shape[0]
     K_max = mu.shape[0]
@@ -87,7 +87,7 @@ def _compute_cluster_log_probs_cuda(X, mu, log_w, out):
             dist = 0.0
             for j in range(p):
                 diff = X[i, j] - mu[k, j]
-                dist += diff * diff
+                dist += diff * diff / sigma2[j]
             out[i, k] = log_w[k] - 0.5 * dist
 
 @cuda.jit
@@ -102,15 +102,15 @@ def _compute_sufficient_stats_cuda(X, z, n_k, sum_x):
             cuda.atomic.add(sum_x, (k, j), X[i, j])
 
 @cuda.jit
-def _sample_cluster_means_cuda(sum_x, n_k, tau2, noise, out):
+def _sample_cluster_means_cuda(sum_x, n_k, tau2, sigma2, noise, out):
     k = cuda.grid(1)
     K_max = sum_x.shape[0]
     p = sum_x.shape[1]
     if k < K_max:
         nk = n_k[k]
         for j in range(p):
-            post_var = 1.0 / (nk + 1.0 / tau2[k, j])
-            post_mean = post_var * sum_x[k, j]
+            post_var = 1.0 / (nk / sigma2[j] + 1.0 / tau2[k, j])
+            post_mean = post_var * (sum_x[k, j] / sigma2[j])
             out[k, j] = post_mean + np.sqrt(post_var) * noise[k, j]
 
 @cuda.jit
@@ -152,7 +152,7 @@ class NumbaBackend(ComputeBackend):
                 self.use_cuda = False
 
     def compute_cluster_log_probs(
-        self, X: np.ndarray, mu: np.ndarray, log_w: np.ndarray
+        self, X: np.ndarray, mu: np.ndarray, log_w: np.ndarray, sigma2: np.ndarray
     ) -> np.ndarray:
         if self.use_cuda:
             n, p = X.shape
@@ -162,16 +162,17 @@ class NumbaBackend(ComputeBackend):
             d_X = cuda.to_device(X)
             d_mu = cuda.to_device(mu)
             d_log_w = cuda.to_device(log_w)
+            d_sigma2 = cuda.to_device(sigma2)
             d_out = cuda.to_device(out)
             
             threads_per_block = 256
             blocks_per_grid = (n + threads_per_block - 1) // threads_per_block
-            _compute_cluster_log_probs_cuda[blocks_per_grid, threads_per_block](d_X, d_mu, d_log_w, d_out)
+            _compute_cluster_log_probs_cuda[blocks_per_grid, threads_per_block](d_X, d_mu, d_log_w, d_sigma2, d_out)
             
             d_out.copy_to_host(out)
             return out
         else:
-            return _compute_cluster_log_probs_numba(X, mu, log_w)
+            return _compute_cluster_log_probs_numba(X, mu, log_w, sigma2)
 
     def compute_sufficient_stats(
         self, X: np.ndarray, z: np.ndarray, K_max: int
@@ -198,7 +199,7 @@ class NumbaBackend(ComputeBackend):
 
     def sample_cluster_means(
         self, sum_x: np.ndarray, n_k: np.ndarray,
-        tau2: np.ndarray, rng: np.random.Generator
+        tau2: np.ndarray, sigma2: np.ndarray, rng: np.random.Generator
     ) -> np.ndarray:
         noise = rng.normal(size=sum_x.shape)
         if self.use_cuda:
@@ -208,19 +209,20 @@ class NumbaBackend(ComputeBackend):
             d_sum_x = cuda.to_device(sum_x)
             d_n_k = cuda.to_device(n_k)
             d_tau2 = cuda.to_device(tau2)
+            d_sigma2 = cuda.to_device(sigma2)
             d_noise = cuda.to_device(noise)
             d_out = cuda.to_device(out)
             
             threads_per_block = 64
             blocks_per_grid = (K_max + threads_per_block - 1) // threads_per_block
             _sample_cluster_means_cuda[blocks_per_grid, threads_per_block](
-                d_sum_x, d_n_k, d_tau2, d_noise, d_out
+                d_sum_x, d_n_k, d_tau2, d_sigma2, d_noise, d_out
             )
             
             d_out.copy_to_host(out)
             return out
         else:
-            return _sample_cluster_means_numba(sum_x, n_k, tau2, noise)
+            return _sample_cluster_means_numba(sum_x, n_k, tau2, sigma2, noise)
 
     def sample_inverse_gaussian(
         self, mu_abs: np.ndarray, lam: np.ndarray,
