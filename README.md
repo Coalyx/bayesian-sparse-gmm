@@ -69,9 +69,7 @@ Run tests using `pytest`:
 pytest
 ```
 
-## Citation
-
-If you use this project in your research, please cite the following paper:
+## Reference
 
 ```bib
 @article{JMLR:v26:23-0142,
