@@ -1,6 +1,8 @@
 import numpy as np
-from ._base import ComputeBackend
+
 from ..utils import sample_inverse_gaussian as utils_sample_inverse_gaussian
+from ._base import ComputeBackend
+
 
 class NumpyBackend(ComputeBackend):
     """NumPy-based compute backend for the Bayesian Sparse GMM."""
@@ -29,8 +31,12 @@ class NumpyBackend(ComputeBackend):
         return n_k, sum_x
 
     def sample_cluster_means(
-        self, sum_x: np.ndarray, n_k: np.ndarray,
-        tau2: np.ndarray, sigma2: np.ndarray, rng: np.random.Generator
+        self,
+        sum_x: np.ndarray,
+        n_k: np.ndarray,
+        tau2: np.ndarray,
+        sigma2: np.ndarray,
+        rng: np.random.Generator,
     ) -> np.ndarray:
         """Step 4b: Sample cluster means mu[k,j] ~ Normal."""
         post_var = 1.0 / (n_k[:, np.newaxis] / sigma2[np.newaxis, :] + 1.0 / tau2)
@@ -38,11 +44,10 @@ class NumpyBackend(ComputeBackend):
         return rng.normal(loc=post_mean, scale=np.sqrt(post_var))
 
     def sample_inverse_gaussian(
-        self, mu_abs: np.ndarray, lam: np.ndarray,
-        rng: np.random.Generator
+        self, mu_abs: np.ndarray, lam: np.ndarray, rng: np.random.Generator
     ) -> np.ndarray:
         """Step 4a: Sample tau^2 via Inverse Gaussian."""
         inv_mean = lam / (mu_abs + 1e-10)
-        shape = lam ** 2
+        shape = lam**2
         inv_tau2 = utils_sample_inverse_gaussian(inv_mean, shape, rng)
         return 1.0 / inv_tau2

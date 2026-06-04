@@ -1,17 +1,18 @@
+from typing import Any, Dict, Optional
+
 import numpy as np
 from sklearn.base import BaseEstimator, ClusterMixin
 from sklearn.utils.validation import check_array, check_is_fitted
-from typing import Optional, Dict, Any
 
-from .config import SamplerConfig, HyperParams
-from .state import SamplerState
 from .backends import select_backend
+from .config import HyperParams, SamplerConfig
 from .sampler import GibbsSampler
 from .utils import log_sum_exp
 
+
 class BayesianSparseGMM(BaseEstimator, ClusterMixin):
     """Bayesian Sparse Gaussian Mixture Model for high-dimensional clustering.
-    
+
     Parameters
     ----------
     K_max : int, default=15
@@ -77,7 +78,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
     def fit(self, X: np.ndarray, y: Any = None) -> "BayesianSparseGMM":
         """Fit the GMM model using Gibbs sampling."""
         X = check_array(X, dtype=[np.float64, np.float32])
-        
+
         config = SamplerConfig(
             K_max=self.K_max,
             n_iter=self.n_iter,
@@ -97,56 +98,63 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
             a_sigma=self.a_sigma,
             b_sigma=self.b_sigma,
         )
-        
+
         self.backend_ = select_backend(config.backend)
         sampler = GibbsSampler(config, hyperparams, self.backend_)
-        
+
         self.states_ = sampler.run(X, seed=self.random_state)
-        
+
         from .postprocessing import align_labels
+
         self.states_ = align_labels(self.states_)
-        
+
         self.w_ = np.mean([state.w for state in self.states_], axis=0)
         self.means_ = np.mean([state.mu for state in self.states_], axis=0)
-        
+
         # Consolidate local gamma states
-        self.feature_probabilities_2d_ = np.mean([state.gamma for state in self.states_], axis=0)
-        
+        self.feature_probabilities_2d_ = np.mean(
+            [state.gamma for state in self.states_], axis=0
+        )
+
         # Final label assignment based on mode over samples
         z_samples = np.array([state.z for state in self.states_])
         labels = np.empty(X.shape[0], dtype=int)
         for i in range(X.shape[0]):
             labels[i] = np.argmax(np.bincount(z_samples[:, i]))
         self.labels_ = labels
-        
+
         # Compute 1D feature probabilities for backward compatibility based on active clusters
         active_clusters = np.unique(self.labels_)
         if len(active_clusters) > 0:
-            self.feature_probabilities_ = np.max(self.feature_probabilities_2d_[active_clusters], axis=0)
+            self.feature_probabilities_ = np.max(
+                self.feature_probabilities_2d_[active_clusters], axis=0
+            )
         else:
             self.feature_probabilities_ = np.max(self.feature_probabilities_2d_, axis=0)
         self.selected_features_ = np.where(self.feature_probabilities_ > 0.5)[0]
-        
+
         return self
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """Predict posterior probability of each cluster for each sample."""
         X = check_array(X, dtype=[np.float64, np.float32])
         check_is_fitted(self, "states_")
-        
+
         n = X.shape[0]
         threshold = 1.0 / (2.0 * n)
         all_probs = []
         for state in self.states_:
             w_safe = np.where(state.w < threshold, 1e-300, state.w)
             log_w = np.log(w_safe)
-            log_probs = self.backend_.compute_cluster_log_probs(X, state.mu, log_w, state.sigma2)
-            
+            log_probs = self.backend_.compute_cluster_log_probs(
+                X, state.mu, log_w, state.sigma2
+            )
+
             max_log = np.max(log_probs, axis=1, keepdims=True)
             probs = np.exp(log_probs - max_log)
             probs /= np.sum(probs, axis=1, keepdims=True)
             all_probs.append(probs)
-            
+
         return np.mean(all_probs, axis=0)
 
     def predict(self, X: np.ndarray) -> np.ndarray:
@@ -157,20 +165,22 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         """Compute the average GMM log-likelihood of the dataset."""
         X = check_array(X, dtype=[np.float64, np.float32])
         check_is_fitted(self, "states_")
-        
+
         n, p = X.shape
         threshold = 1.0 / (2.0 * n)
-        
+
         log_liks = []
         for state in self.states_:
             w_safe = np.where(state.w < threshold, 1e-300, state.w)
             log_w = np.log(w_safe)
-            log_probs = self.backend_.compute_cluster_log_probs(X, state.mu, log_w, state.sigma2)
-            
+            log_probs = self.backend_.compute_cluster_log_probs(
+                X, state.mu, log_w, state.sigma2
+            )
+
             const = -0.5 * p * np.log(2.0 * np.pi) - 0.5 * np.sum(np.log(state.sigma2))
             sample_log_lik = log_sum_exp(log_probs, axis=1) + const
             log_liks.append(np.mean(sample_log_lik))
-            
+
         return float(np.mean(log_liks))
 
     @property

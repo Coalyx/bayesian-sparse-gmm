@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 from typing import Optional
 
+
 @dataclass(frozen=True)
 class HyperParams:
     """Hyperparameters for the Bayesian GMM."""
+
     lambda_0: float = 1000.0
     lambda_1: float = 0.1
     alpha: float = 0.01
@@ -11,9 +13,11 @@ class HyperParams:
     a_sigma: float = 1.0
     b_sigma: float = 1.0
 
+
 @dataclass(frozen=True)
 class SamplerConfig:
     """Configuration options for the Gibbs sampler."""
+
     K_max: int = 15
     n_iter: int = 2000
     burn_in: int = 500
