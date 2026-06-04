@@ -1,4 +1,8 @@
 import numpy as np
+import pytest
+
+# Skip this entire test module if numba is not installed
+pytest.importorskip("numba")
 
 from bayesian_sparse_gmm.backends._numba import NumbaBackend
 from bayesian_sparse_gmm.backends._numpy import NumpyBackend
