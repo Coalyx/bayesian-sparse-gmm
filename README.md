@@ -15,7 +15,7 @@ pip install bayesian-sparse-gmm
 Or for development (editable mode):
 
 ```bash
-git clone https://github.com/your-username/bayesian-sparse-gmm.git
+git clone https://github.com/Coalyx/bayesian-sparse-gmm.git
 cd bayesian-sparse-gmm
 pip install -e .
 ```
