@@ -28,37 +28,30 @@ from sklearn.datasets import make_blobs
 from sklearn.preprocessing import StandardScaler
 from bayesian_sparse_gmm import BayesianSparseGMM
 
-# 1. Generate synthetic data: 3 clusters in a 10-dimensional space
-# Only the first 2 features are informative; the remaining 8 are random noise.
+# Append noise dimensions to true clusters to verify that the model successfully performs feature selection.
 rng = np.random.default_rng(42)
 X_clean, _ = make_blobs(n_samples=200, centers=3, n_features=2, cluster_std=0.5, random_state=42)
 X_noise = rng.normal(loc=0.0, scale=1.0, size=(200, 8))
 X = np.hstack([X_clean, X_noise])
 
-# Standardize the features
+# Standardize features to satisfy the zero-mean assumptions in the prior structure.
 X = StandardScaler().fit_transform(X)
 
-# 2. Initialize and fit the Bayesian Sparse GMM model
 model = BayesianSparseGMM(
     K_max=5,
     n_iter=300,
     burn_in=100,
-    lambda_0=10.0,   # Spike prior parameter
-    lambda_1=0.05,   # Slab prior parameter
+    lambda_0=10.0,
+    lambda_1=0.05,
     random_state=42,
     verbose=0
 )
 model.fit(X)
 
-# 3. Retrieve results
 print(f"Number of active clusters: {model.n_clusters_}")
-# Expected output: 3
 print(f"Selected informative features: {model.selected_features_}")
-# Expected output: [0 1]
 print(f"Feature inclusion probabilities: {model.feature_probabilities_.round(3)}")
-# Expected output: high probabilities for 0 and 1, near-zero for others
 
-# 4. Predict cluster assignments
 labels = model.predict(X)
 ```
 
