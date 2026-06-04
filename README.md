@@ -2,8 +2,6 @@
 
 Bayesian Sparse Gaussian Mixture Model (GMM) implementation in Python.
 
-This model employs a sparsity-inducing prior (e.g., a Dirichlet distribution with parameter $\alpha_0 < 1$) over mixture component weights to automatically determine/prune the number of active components.
-
 ## Installation
 
 To install the latest release:
