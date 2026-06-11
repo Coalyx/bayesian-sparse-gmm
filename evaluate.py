@@ -38,10 +38,10 @@ def run_olivetti_benchmark():
         n_iter=500,
         burn_in=200,
         thinning=2,
-        lambda_0=15.0,
-        lambda_1=0.05,
-        alpha=0.01,
-        theta=0.1,
+        lambda_0=100.0,
+        lambda_1=1.0,
+        alpha=1.0,
+        theta=0.5,
         a_sigma=1.0,
         b_sigma=1.0,
         backend="numba",
@@ -133,10 +133,10 @@ def run_text_benchmark():
         n_iter=300,
         burn_in=100,
         thinning=2,
-        lambda_0=10.0,
-        lambda_1=0.05,
-        alpha=0.01,
-        theta=0.1,
+        lambda_0=100.0,
+        lambda_1=1.0,
+        alpha=1.0,
+        theta=0.5,
         a_sigma=1.0,
         b_sigma=1.0,
         backend="numba",
@@ -183,7 +183,7 @@ def run_synthetic_sparse_benchmark():
     t0 = time.time()
     gmm = BayesianSparseGMM(
         K_max=10, n_iter=500, burn_in=100, thinning=1,
-        lambda_0=10.0, lambda_1=0.05, alpha=0.01, theta=0.1,
+        lambda_0=100.0, lambda_1=1.0, alpha=1.0, theta=0.5,
         a_sigma=1.0, b_sigma=1.0,
         backend="numba", random_state=42, verbose=1,
     )
@@ -253,7 +253,7 @@ def run_digits_benchmark():
     t0 = time.time()
     gmm = BayesianSparseGMM(
         K_max=15, n_iter=600, burn_in=150, thinning=2,
-        lambda_0=10.0, lambda_1=0.05, alpha=0.01, theta=0.1,
+        lambda_0=100.0, lambda_1=1.0, alpha=1.0, theta=0.5,
         a_sigma=1.0, b_sigma=1.0,
         backend="numba", random_state=42, verbose=1,
     )
@@ -336,7 +336,7 @@ def run_wine_benchmark():
     t0 = time.time()
     gmm = BayesianSparseGMM(
         K_max=6, n_iter=500, burn_in=100, thinning=1,
-        lambda_0=10.0, lambda_1=0.05, alpha=0.01, theta=0.1,
+        lambda_0=100.0, lambda_1=1.0, alpha=1.0, theta=0.5,
         a_sigma=1.0, b_sigma=1.0,
         backend="numba", random_state=42, verbose=1,
     )

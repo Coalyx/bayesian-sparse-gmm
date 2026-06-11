@@ -6,10 +6,10 @@ from typing import Optional
 class HyperParams:
     """Hyperparameters for the Bayesian GMM."""
 
-    lambda_0: float = 1000.0
-    lambda_1: float = 0.1
-    alpha: float = 0.01
-    theta: float = 0.1
+    lambda_0: float = 100.0  # Spike rate (lambda_0 >> lambda_1 for sparsity)
+    lambda_1: float = 1.0  # Slab rate
+    alpha: float = 1.0  # Dirichlet concentration (alpha >= 1.0)
+    theta: float = 0.5  # Prior probability of informative features
     a_sigma: float = 1.0
     b_sigma: float = 1.0
 
@@ -18,9 +18,9 @@ class HyperParams:
 class SamplerConfig:
     """Configuration options for the Gibbs sampler."""
 
-    K_max: int = 15
-    n_iter: int = 2000
-    burn_in: int = 500
+    K_max: int = 20  # Conservative cluster count upper bound
+    n_iter: int = 5000  # Total iterations (burn_in + post-burn_in)
+    burn_in: int = 1000  # Burn-in iterations to discard
     thinning: int = 1
     warm_up_iters: int = 50
     backend: str = "auto"
