@@ -10,6 +10,7 @@ class HyperParams:
     lambda_1: float = 1.0  # Slab rate
     alpha: float = 1.0  # Dirichlet concentration (alpha >= 1.0)
     theta: float = 0.5  # Prior probability of informative features
+    kappa: float = 0.1  # Sparsity aggressiveness for beta_theta
     a_sigma: float = 1.0
     b_sigma: float = 1.0
 

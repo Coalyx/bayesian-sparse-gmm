@@ -174,8 +174,8 @@ def test_gibbs_sequence_order():
     assert np.allclose(mock_rng.passed_alpha, hp.alpha + np.array([0, 5, 0]))
 
 
-def test_sampler_theta_constant():
-    """Verify that theta is initialized to the value specified in HyperParams and remains constant."""
+def test_sampler_theta_updates():
+    """Verify that theta is initialized to the value specified in HyperParams and updates dynamically."""
     custom_theta = 0.35
     hp = HyperParams(theta=custom_theta)
     cfg = SamplerConfig(K_max=3)
@@ -188,7 +188,12 @@ def test_sampler_theta_constant():
     state = sampler.initialize(X, rng)
     assert state.theta == custom_theta
 
-    # Run a few steps to ensure theta doesn't change
+    # Run a few steps to ensure theta changes
+    thetas = [state.theta]
     for _ in range(5):
         state = sampler.sample_step(X, state, rng)
-        assert state.theta == custom_theta
+        thetas.append(state.theta)
+
+    # It should not remain constant, so the number of unique thetas is > 1
+    assert len(set(thetas)) > 1
+

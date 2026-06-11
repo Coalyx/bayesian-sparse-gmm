@@ -22,6 +22,7 @@ class GibbsSampler:
         """Initialize the sampler state using K-Means++ or random assignment."""
         n, p = X.shape
         K_max = self.config.K_max
+        self.beta_theta = p ** (1 + self.hyperparams.kappa) / np.maximum(np.log(p), 1e-10)
 
         try:
             from sklearn.cluster import KMeans
@@ -117,6 +118,11 @@ class GibbsSampler:
             p_slab = np.exp(log_slab - log_denom)
             xi = rng.binomial(1, p_slab)
 
+        # STEP 3c: Update theta ~ Beta(1 + s_active, beta_theta + p - s_active) (§7.5)
+        s_active = int(np.sum(xi))
+        beta_theta = getattr(self, "beta_theta", p ** (1.0 + hp.kappa) / np.maximum(np.log(p), 1e-10))
+        theta = rng.beta(1.0 + s_active, beta_theta + (p - s_active))
+
         # STEP 3b: Update feature-specific variances (sigma2)
         # sigma2_j ~ Inverse-Gamma(a_sigma + N / 2, b_sigma + 0.5 * sum_i (X_ij - mu_{Z_i, j})^2)
         residuals_sq = (X - state.mu[z]) ** 2
@@ -141,7 +147,7 @@ class GibbsSampler:
             w=w,
             mu=mu,
             xi=xi,
-            theta=state.theta,
+            theta=theta,
             tau2=tau2,
             sigma2=sigma2,
             iteration=state.iteration + 1,
