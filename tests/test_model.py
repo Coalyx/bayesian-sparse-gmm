@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from sklearn.datasets import make_blobs
 
 from bayesian_sparse_gmm.model import BayesianSparseGMM
@@ -65,3 +66,31 @@ def test_model_custom_theta():
     assert hasattr(gmm, "states_")
     for state in gmm.states_:
         assert state.theta == 0.4
+
+
+def test_model_validation():
+    X = np.random.normal(size=(20, 3))
+    # alpha < 1.0 constraint
+    gmm_invalid_alpha = BayesianSparseGMM(alpha=0.5)
+    with pytest.raises(ValueError, match="alpha must be >= 1.0"):
+        gmm_invalid_alpha.fit(X)
+
+    # lambda_0 <= lambda_1 constraint
+    gmm_invalid_lambdas = BayesianSparseGMM(lambda_0=1.0, lambda_1=2.0)
+    with pytest.raises(ValueError, match="lambda_0 must be > lambda_1"):
+        gmm_invalid_lambdas.fit(X)
+
+    gmm_equal_lambdas = BayesianSparseGMM(lambda_0=1.0, lambda_1=1.0)
+    with pytest.raises(ValueError, match="lambda_0 must be > lambda_1"):
+        gmm_equal_lambdas.fit(X)
+
+
+def test_model_defaults():
+    gmm = BayesianSparseGMM()
+    assert gmm.K_max == 20
+    assert gmm.n_iter == 5000
+    assert gmm.burn_in == 1000
+    assert gmm.lambda_0 == 100.0
+    assert gmm.lambda_1 == 1.0
+    assert gmm.alpha == 1.0
+    assert gmm.theta == 0.5

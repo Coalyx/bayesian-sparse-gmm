@@ -15,21 +15,21 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
 
     Parameters
     ----------
-    K_max : int, default=15
+    K_max : int, default=20
         Maximum number of clusters.
-    n_iter : int, default=2000
+    n_iter : int, default=5000
         Number of Gibbs sampler iterations.
-    burn_in : int, default=500
+    burn_in : int, default=1000
         Number of burn-in iterations to discard.
     thinning : int, default=1
         Thinning interval for MCMC samples.
-    lambda_0 : float, default=1000.0
+    lambda_0 : float, default=100.0
         Spike prior parameter (large value for sparse features).
-    lambda_1 : float, default=0.1
+    lambda_1 : float, default=1.0
         Slab prior parameter (small value for active features).
-    alpha : float, default=0.01
+    alpha : float, default=1.0
         Dirichlet prior parameter for mixing weights.
-    theta : float, default=0.1
+    theta : float, default=0.5
         Prior probability of a feature being informative (Slab).
     backend : str, default='auto'
         Computation backend: 'numpy', 'numba', or 'auto'.
@@ -43,15 +43,15 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
 
     def __init__(
         self,
-        K_max: int = 15,
-        n_iter: int = 2000,
-        burn_in: int = 500,
+        K_max: int = 20,
+        n_iter: int = 5000,
+        burn_in: int = 1000,
         thinning: int = 1,
         warm_up_iters: int = 50,
-        lambda_0: float = 1000.0,
-        lambda_1: float = 0.1,
-        alpha: float = 0.01,
-        theta: float = 0.1,
+        lambda_0: float = 100.0,
+        lambda_1: float = 1.0,
+        alpha: float = 1.0,
+        theta: float = 0.5,
         a_sigma: float = 1.0,
         b_sigma: float = 1.0,
         backend: str = "auto",
@@ -78,6 +78,17 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
     def fit(self, X: np.ndarray, y: Any = None) -> "BayesianSparseGMM":
         """Fit the GMM model using Gibbs sampling."""
         X = check_array(X, dtype=[np.float64, np.float32])
+
+        if self.alpha < 1.0:
+            raise ValueError(
+                f"alpha must be >= 1.0 (paper §2 constraint). Got alpha={self.alpha}. "
+                "Values < 1 produce degenerate Dirichlet priors."
+            )
+        if self.lambda_0 <= self.lambda_1:
+            raise ValueError(
+                "lambda_0 must be > lambda_1 (spike > slab). "
+                f"Got lambda_0={self.lambda_0}, lambda_1={self.lambda_1}."
+            )
 
         config = SamplerConfig(
             K_max=self.K_max,
