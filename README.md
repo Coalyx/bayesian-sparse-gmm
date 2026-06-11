@@ -67,6 +67,33 @@ Run tests using `pytest`:
 pytest
 ```
 
+## Algorithm Overview
+
+Bayesian Sparse Gaussian Mixture Model (BSGMM) is a robust clustering algorithm designed specifically for high-dimensional data where the number of features significantly exceeds the number of samples ($p \gg n$). It integrates a Spike-and-Slab LASSO prior to perform simultaneous clustering and feature selection.
+
+### Suitable Use Cases
+
+1. **High-Dimensional Clustering ($p \gg n$)**: When dealing with datasets where traditional clustering algorithms (like K-Means or standard GMM) fail due to the "curse of dimensionality". Examples include bioinformatics (e.g., single-cell RNA-seq, genomics), text mining (high-dimensional TF-IDF matrices), and high-resolution images.
+2. **Automatic Feature Selection (Interpretability)**: When the goal is not only to cluster the samples but also to identify which specific features (biomarkers, keywords, pixels) drive the cluster assignments. The model automatically shrinks noisy features to exactly zero.
+3. **Unknown Number of Clusters**: When the true number of clusters is unknown. BSGMM can dynamically infer the optimal number of clusters from the data (bounded by `K_max`).
+4. **Weak Signals in Noisy Backgrounds**: When the discriminative signal is weak and dispersed among thousands of irrelevant features, the model's sparsity mechanism is highly effective at pooling signals.
+
+## Hyperparameters
+
+Understanding the key hyperparameters is crucial for fine-tuning the model's sparsity and clustering behavior:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `K_max` | `int` | `15` | The maximum possible number of clusters. The algorithm will automatically find the active number of clusters $K \le K_{max}$. Should be set safely higher than the expected number of true clusters. |
+| `lambda_0` | `float` | `1000.0` | **Spike rate** of the Spike-and-Slab LASSO prior. A larger value aggressively forces non-informative (noise) features closer to zero. Must satisfy `lambda_0 >> lambda_1`. |
+| `lambda_1` | `float` | `0.1` | **Slab rate**. A smaller value allows informative features to deviate freely from zero to capture the cluster structure. |
+| `alpha` | `float` | `1.0` | Dirichlet concentration parameter for the cluster weight prior. Controls the prior belief over the distribution of cluster sizes. |
+| `theta` | `float` | `0.1` | Prior probability of a feature being included in the active set (the slab component). Smaller values induce stronger sparsity (fewer features selected). |
+| `burn_in` | `int` | `500` | Number of initial MCMC iterations discarded to allow the Markov chain to converge to the stationary distribution. |
+| `n_iter` | `int` | `1000` | Total number of MCMC iterations. The number of samples used for posterior inference is `n_iter - burn_in`. |
+
+*Tip: For extremely high-dimensional datasets with heavy noise, tuning `lambda_0` to be larger and `theta` to be smaller will encourage more aggressive feature selection.*
+
 ## Reference
 
 ```bib
