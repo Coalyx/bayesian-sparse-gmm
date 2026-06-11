@@ -41,7 +41,7 @@ class GibbsSampler:
             mu = rng.normal(size=(K_max, p))
 
         w = np.ones(K_max) / K_max
-        gamma = np.ones((K_max, p), dtype=np.int32)
+        xi = np.zeros(p, dtype=np.int32)
         theta = self.hyperparams.theta
         tau2 = np.ones((K_max, p))
         sigma2 = np.ones(p)
@@ -50,7 +50,7 @@ class GibbsSampler:
             z=z,
             w=w,
             mu=mu,
-            gamma=gamma,
+            xi=xi,
             theta=theta,
             tau2=tau2,
             sigma2=sigma2,
@@ -85,37 +85,37 @@ class GibbsSampler:
         n_k = np.bincount(z, minlength=K_max)
         w = rng.dirichlet(hp.alpha + n_k)
 
-        # STEP 3: Update feature inclusion indicators (gamma) using active cluster mask
-        active_mask = n_k > 0
-        active_K = int(np.sum(active_mask))
-        if active_K == 0:
-            active_K = K_max
-            active_mask = np.ones(K_max, dtype=bool)
-
-        gamma = np.zeros((K_max, p), dtype=np.int32)
+        # STEP 3: Update joint feature inclusion indicators (xi) using active cluster mask (§7.4)
+        xi = np.zeros(p, dtype=np.int32)
         if state.iteration < self.config.warm_up_iters:
-            # During warm-up, force gamma to 1 for all active clusters to allow means to migrate
-            gamma[active_mask] = 1
+            # During warm-up, force all features active
+            xi[:] = 1
         else:
-            # Local feature selection: sample gamma_kj independently for active clusters
-            active_mu = state.mu[active_mask]
-            log_laplace_slab = (
-                np.log(hp.lambda_1) - np.log(2.0)
-            ) - hp.lambda_1 * np.abs(active_mu)
-            log_laplace_spike = (
-                np.log(hp.lambda_0) - np.log(2.0)
-            ) - hp.lambda_0 * np.abs(active_mu)
-
+            active_idx = np.where(n_k > 0)[0]
             safe_theta = np.clip(state.theta, 1e-15, 1.0 - 1e-15)
-            log_P_slab = np.log(safe_theta) + log_laplace_slab
-            log_P_spike = np.log(1.0 - safe_theta) + log_laplace_spike
+            if len(active_idx) > 0:
+                # Normal-scale-mixture formulation vectorized over features
+                mu_active = state.mu[active_idx, :]
+                tau2_active = state.tau2[active_idx, :]
+                sum_mu_tau2 = np.sum((mu_active ** 2) / tau2_active, axis=0)
 
-            max_log = np.maximum(log_P_slab, log_P_spike)
-            prob_slab = np.exp(log_P_slab - max_log)
-            prob_spike = np.exp(log_P_spike - max_log)
-            p_slab = prob_slab / (prob_slab + prob_spike)
+                log_slab = (
+                    np.log(safe_theta)
+                    + len(active_idx) * np.log(hp.lambda_1)
+                    - 0.5 * (hp.lambda_1 ** 2) * sum_mu_tau2
+                )
+                log_spike = (
+                    np.log(1.0 - safe_theta)
+                    + len(active_idx) * np.log(hp.lambda_0)
+                    - 0.5 * (hp.lambda_0 ** 2) * sum_mu_tau2
+                )
+            else:
+                log_slab = np.full(p, np.log(safe_theta))
+                log_spike = np.full(p, np.log(1.0 - safe_theta))
 
-            gamma[active_mask] = rng.binomial(1, p_slab)
+            log_denom = np.logaddexp(log_slab, log_spike)
+            p_slab = np.exp(log_slab - log_denom)
+            xi = rng.binomial(1, p_slab)
 
         # STEP 3b: Update feature-specific variances (sigma2)
         # sigma2_j ~ Inverse-Gamma(a_sigma + N / 2, b_sigma + 0.5 * sum_i (X_ij - mu_{Z_i, j})^2)
@@ -129,7 +129,8 @@ class GibbsSampler:
         sigma2 = 1.0 / np.maximum(gamma_sig_sample, 1e-15)
 
         # STEP 4: Update cluster means (mu) and auxiliary variables (tau2)
-        lam = np.where(gamma == 1, hp.lambda_1, hp.lambda_0)
+        lam_per_feature = np.where(xi == 1, hp.lambda_1, hp.lambda_0)
+        lam = np.broadcast_to(lam_per_feature, (K_max, p)).copy()
         tau2 = self.backend.sample_inverse_gaussian(np.abs(state.mu), lam, rng)
 
         n_k_new, sum_x = self.backend.compute_sufficient_stats(X, z, K_max)
@@ -139,7 +140,7 @@ class GibbsSampler:
             z=z,
             w=w,
             mu=mu,
-            gamma=gamma,
+            xi=xi,
             theta=state.theta,
             tau2=tau2,
             sigma2=sigma2,

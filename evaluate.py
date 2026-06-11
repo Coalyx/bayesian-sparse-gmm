@@ -81,10 +81,10 @@ def run_olivetti_benchmark():
     trace = gmm.trace_
     rhat_t = gelman_rubin(trace["theta"])
     ess_t = effective_sample_size(trace["theta"])
-    rhat_g = gelman_rubin(trace["gamma"])
-    ess_g = effective_sample_size(trace["gamma"])
+    rhat_g = gelman_rubin(trace["xi"])
+    ess_g = effective_sample_size(trace["xi"])
     print(f"\nTheta  - R-hat: {rhat_t:.4f} | ESS: {ess_t:.1f}")
-    print(f"Gamma  - R-hat mean: {np.mean(rhat_g):.4f} max: {np.max(rhat_g):.4f}")
+    print(f"Xi     - R-hat mean: {np.mean(rhat_g):.4f} max: {np.max(rhat_g):.4f}")
     print(f"         ESS   mean: {np.mean(ess_g):.1f} min: {np.min(ess_g):.1f}")
 
     # --- Visualization ---
@@ -94,7 +94,7 @@ def run_olivetti_benchmark():
 
     prob_img = gmm.feature_probabilities_.reshape(64, 64)
     im0 = axes[0].imshow(prob_img, cmap="hot", interpolation="nearest")
-    axes[0].set_title("P(gamma=1 | X)")
+    axes[0].set_title("P(xi=1 | X)")
     fig.colorbar(im0, ax=axes[0], fraction=0.046)
 
     mask_img = (gmm.feature_probabilities_ > 0.5).reshape(64, 64).astype(float)
@@ -228,7 +228,7 @@ def run_synthetic_sparse_benchmark():
     bar_c = ["#e74c3c" if i in true_sig else "#bdc3c7" for i in range(p_total)]
     axes[2].bar(range(p_total), gmm.feature_probabilities_, color=bar_c, alpha=0.85)
     axes[2].axhline(0.5, color="k", ls="--", lw=1, label="threshold")
-    axes[2].set_xlabel("Feature index"); axes[2].set_ylabel("P(γ=1|X)")
+    axes[2].set_xlabel("Feature index"); axes[2].set_ylabel("P(ξ=1|X)")
     axes[2].set_title(f"Feature Importance (red=signal | Prec={prec:.0%}, Rec={rec:.0%})")
     axes[2].legend(fontsize=9)
 
@@ -392,7 +392,7 @@ def run_wine_benchmark():
     axes[2].set_yticks(range(len(feat_names)))
     axes[2].set_yticklabels([feat_names[i] for i in sorted_idx], fontsize=8)
     axes[2].axvline(0.5, color="k", ls="--", lw=1)
-    axes[2].set_xlabel("P(γ=1|X)")
+    axes[2].set_xlabel("P(ξ=1|X)")
     axes[2].set_title(f"Feature Importance ({n_sel}/13 selected)")
 
     plt.tight_layout()

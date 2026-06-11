@@ -122,10 +122,11 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         self.w_ = np.mean([state.w for state in self.states_], axis=0)
         self.means_ = np.mean([state.mu for state in self.states_], axis=0)
 
-        # Consolidate local gamma states
-        self.feature_probabilities_2d_ = np.mean(
-            [state.gamma for state in self.states_], axis=0
+        # Joint xi is 1D (p,) — posterior inclusion probability per feature
+        self.feature_probabilities_ = np.mean(
+            [state.xi for state in self.states_], axis=0
         )
+        self.selected_features_ = np.where(self.feature_probabilities_ > 0.5)[0]
 
         # Final label assignment based on mode over samples
         z_samples = np.array([state.z for state in self.states_])
@@ -133,16 +134,6 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         for i in range(X.shape[0]):
             labels[i] = np.argmax(np.bincount(z_samples[:, i]))
         self.labels_ = labels
-
-        # Compute 1D feature probabilities for backward compatibility based on active clusters
-        active_clusters = np.unique(self.labels_)
-        if len(active_clusters) > 0:
-            self.feature_probabilities_ = np.max(
-                self.feature_probabilities_2d_[active_clusters], axis=0
-            )
-        else:
-            self.feature_probabilities_ = np.max(self.feature_probabilities_2d_, axis=0)
-        self.selected_features_ = np.where(self.feature_probabilities_ > 0.5)[0]
 
         return self
 
@@ -201,6 +192,14 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         return len(np.unique(self.labels_))
 
     @property
+    def feature_probabilities_2d_(self) -> np.ndarray:
+        """Deprecated: 2D feature probabilities (retained for backward compatibility)."""
+        check_is_fitted(self, "feature_probabilities_")
+        return np.broadcast_to(
+            self.feature_probabilities_, (self.K_max, len(self.feature_probabilities_))
+        )
+
+    @property
     def trace_(self) -> Dict[str, np.ndarray]:
         """Full trace of MCMC samples."""
         check_is_fitted(self, "states_")
@@ -208,7 +207,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
             "z": np.array([state.z for state in self.states_]),
             "w": np.array([state.w for state in self.states_]),
             "mu": np.array([state.mu for state in self.states_]),
-            "gamma": np.array([state.gamma for state in self.states_]),
+            "xi": np.array([state.xi for state in self.states_]),
             "theta": np.array([state.theta for state in self.states_]),
             "sigma2": np.array([state.sigma2 for state in self.states_]),
         }
