@@ -14,6 +14,7 @@ class HyperParams:
     lambda_pois: float = 2.0  # Truncated Poisson rate for K prior
     a_sigma: float = 1.0
     b_sigma: float = 1.0
+    use_identity_covariance: bool = True  # paper §6 default: fixed I_p
 
 
 @dataclass(frozen=True)

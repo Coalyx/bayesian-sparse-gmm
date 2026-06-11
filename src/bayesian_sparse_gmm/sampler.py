@@ -180,15 +180,17 @@ class GibbsSampler:
         theta = rng.beta(1.0 + s_active, beta_theta + (p - s_active))
 
         # STEP 3b: Update feature-specific variances (sigma2)
-        # sigma2_j ~ Inverse-Gamma(a_sigma + N / 2, b_sigma + 0.5 * sum_i (X_ij - mu_{Z_i, j})^2)
-        residuals_sq = (X - state.mu[z]) ** 2
-        sum_residuals_sq = np.sum(residuals_sq, axis=0)
-
-        shape_sig = hp.a_sigma + 0.5 * n
-        scale_sig = 1.0 / (hp.b_sigma + 0.5 * sum_residuals_sq)
-
-        gamma_sig_sample = rng.gamma(shape_sig, scale_sig)
-        sigma2 = 1.0 / np.maximum(gamma_sig_sample, 1e-15)
+        if hp.use_identity_covariance:
+            # Fixed identity covariance (paper §6)
+            sigma2 = np.ones(p)
+        else:
+            # Learned diagonal covariance (engineering extension)
+            residuals_sq = (X - state.mu[z]) ** 2
+            sum_residuals_sq = np.sum(residuals_sq, axis=0)
+            shape_sig = hp.a_sigma + 0.5 * n
+            scale_sig = 1.0 / (hp.b_sigma + 0.5 * sum_residuals_sq)
+            gamma_sig_sample = rng.gamma(shape_sig, scale_sig)
+            sigma2 = 1.0 / np.maximum(gamma_sig_sample, 1e-15)
 
         # STEP 4: Update cluster means (mu) and auxiliary variables (tau2)
         lam_per_feature = np.where(xi == 1, hp.lambda_1, hp.lambda_0)
