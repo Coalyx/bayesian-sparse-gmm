@@ -40,7 +40,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         If True, use fixed identity covariance I_p (paper §6 default).
         If False, learn a diagonal per-feature covariance sigma2.
     backend : str, default='auto'
-        Computation backend: 'numpy', 'numba', or 'auto'.
+        Computation backend: 'numpy', 'numba', 'cuda', or 'auto'.
     n_jobs : int, default=-1
         Parallel jobs for Numba.
     random_state : int, optional

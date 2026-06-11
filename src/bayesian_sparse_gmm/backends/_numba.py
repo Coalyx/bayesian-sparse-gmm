@@ -155,6 +155,27 @@ def _sample_inverse_gaussian_cuda(mu_abs, lam, y_noise, u_noise, out_tau2):
 # =====================================================================
 
 
+def _probe_numba_cuda() -> bool:
+    """Test-link a trivial kernel to verify PTX/driver compatibility."""
+    try:
+
+        @cuda.jit
+        def _noop(x):
+            pass
+
+        arr = cuda.device_array(1, dtype=np.float32)
+        _noop[1, 1](arr)
+        cuda.synchronize()
+        return True
+    except Exception as e:
+        warnings.warn(
+            f"Numba CUDA probe failed ({e}). "
+            "This usually means the Numba CUDA toolkit version is newer "
+            "than your NVIDIA driver supports. Falling back to CPU."
+        )
+        return False
+
+
 class NumbaBackend(ComputeBackend):
     """Numba-accelerated compute backend supporting CPU parallel and GPU CUDA."""
 
@@ -163,9 +184,12 @@ class NumbaBackend(ComputeBackend):
         if use_cuda:
             if not cuda.is_available():
                 warnings.warn(
-                    "CUDA is requested but Numba CUDA is not available. Falling back to CPU multi-core."
+                    "CUDA is requested but Numba CUDA is not available. "
+                    "Falling back to CPU multi-core."
                 )
                 self.use_cuda = False
+            else:
+                self.use_cuda = _probe_numba_cuda()
 
     def compute_cluster_log_probs(
         self, X: np.ndarray, mu: np.ndarray, log_w: np.ndarray, sigma2: np.ndarray

@@ -17,29 +17,33 @@ class CUDABackend(ComputeBackend):
     def __init__(self):
         if not CUPY_AVAILABLE:
             raise ImportError(
-                "CuPy is not installed. Please install cupy to use CUDABackend."
+                "CuPy is not installed. Install with: pip install cupy-cuda12x"
             )
 
     def compute_cluster_log_probs(
-        self, X: np.ndarray, mu: np.ndarray, log_w: np.ndarray
+        self, X: np.ndarray, mu: np.ndarray, log_w: np.ndarray, sigma2: np.ndarray
     ) -> np.ndarray:
-        """Step 2: Compute log probability of cluster assignment for all samples and clusters on GPU."""
+        """Compute diagonal-Mahalanobis log-probabilities on GPU."""
         X_gpu = cp.asarray(X)
         mu_gpu = cp.asarray(mu)
         log_w_gpu = cp.asarray(log_w)
+        sigma2_gpu = cp.asarray(sigma2)
 
-        x_sq = cp.sum(X_gpu**2, axis=1, keepdims=True)
-        mu_sq = cp.sum(mu_gpu**2, axis=1, keepdims=True).T
-        dist = x_sq - 2.0 * cp.dot(X_gpu, mu_gpu.T) + mu_sq
+        std = cp.sqrt(sigma2_gpu)
+        X_scaled = X_gpu / std
+        mu_scaled = mu_gpu / std
+
+        x_sq = cp.sum(X_scaled**2, axis=1, keepdims=True)
+        mu_sq = cp.sum(mu_scaled**2, axis=1, keepdims=True).T
+        dist = x_sq - 2.0 * cp.dot(X_scaled, mu_scaled.T) + mu_sq
         dist = cp.maximum(dist, 0.0)
 
-        log_probs = log_w_gpu - 0.5 * dist
-        return cp.asnumpy(log_probs)
+        return cp.asnumpy(log_w_gpu - 0.5 * dist)
 
     def compute_sufficient_stats(
         self, X: np.ndarray, z: np.ndarray, K_max: int
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Step 4: Compute cluster sizes and feature sums per cluster on GPU."""
+        """Compute cluster sizes and feature sums per cluster on GPU."""
         X_gpu = cp.asarray(X)
         z_gpu = cp.asarray(z)
 
@@ -54,18 +58,20 @@ class CUDABackend(ComputeBackend):
         sum_x: np.ndarray,
         n_k: np.ndarray,
         tau2: np.ndarray,
+        sigma2: np.ndarray,
         rng: np.random.Generator,
     ) -> np.ndarray:
-        """Step 4b: Sample cluster means mu[k,j] ~ Normal on GPU."""
+        """Sample cluster means mu[k,j] ~ Normal on GPU."""
         sum_x_gpu = cp.asarray(sum_x)
         n_k_gpu = cp.asarray(n_k)
         tau2_gpu = cp.asarray(tau2)
+        sigma2_gpu = cp.asarray(sigma2)
 
         noise = rng.normal(size=sum_x.shape)
         noise_gpu = cp.asarray(noise)
 
-        post_var = 1.0 / (n_k_gpu[:, cp.newaxis] + 1.0 / tau2_gpu)
-        post_mean = post_var * sum_x_gpu
+        post_var = 1.0 / (n_k_gpu[:, cp.newaxis] / sigma2_gpu + 1.0 / tau2_gpu)
+        post_mean = post_var * (sum_x_gpu / sigma2_gpu)
         mu_gpu = post_mean + cp.sqrt(post_var) * noise_gpu
 
         return cp.asnumpy(mu_gpu)
@@ -73,7 +79,7 @@ class CUDABackend(ComputeBackend):
     def sample_inverse_gaussian(
         self, mu_abs: np.ndarray, lam: np.ndarray, rng: np.random.Generator
     ) -> np.ndarray:
-        """Step 4a: Sample tau^2 via Inverse Gaussian on GPU using stable formula."""
+        """Sample tau^2 via Inverse Gaussian on GPU."""
         mu_abs_gpu = cp.asarray(mu_abs)
         lam_gpu = cp.asarray(lam)
 
@@ -83,8 +89,7 @@ class CUDABackend(ComputeBackend):
         y_gpu = cp.asarray(y_noise)
         u_gpu = cp.asarray(u_noise)
 
-        inv_mean = lam_gpu / (mu_abs_gpu + 1e-10)
-        inv_mean = cp.minimum(inv_mean, 1e5)
+        inv_mean = cp.minimum(lam_gpu / (mu_abs_gpu + 1e-10), 1e5)
         shape = lam_gpu**2
         inv_mean2 = inv_mean**2
 
@@ -98,9 +103,5 @@ class CUDABackend(ComputeBackend):
         cond = inv_mean / (inv_mean + x1 + 1e-15)
         mask = u_gpu <= cond
 
-        res = cp.empty_like(inv_mean)
-        res[mask] = x1[mask]
-        res[~mask] = inv_mean2[~mask] / (x1[~mask] + 1e-15)
-
-        tau2_gpu = 1.0 / res
-        return cp.asnumpy(tau2_gpu)
+        res = cp.where(mask, x1, inv_mean2 / (x1 + 1e-15))
+        return cp.asnumpy(1.0 / res)

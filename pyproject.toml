@@ -33,6 +33,9 @@ dev = [
     "flake8>=4.0.0",
     "matplotlib>=3.5.0",
 ]
+cuda = [
+    "cupy-cuda12x>=12.0.0",
+]
 
 [tool.hatch.version]
 path = "src/bayesian_sparse_gmm/__init__.py"
