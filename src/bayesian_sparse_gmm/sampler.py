@@ -6,6 +6,7 @@ from tqdm import tqdm
 from .backends._base import ComputeBackend
 from .config import HyperParams, SamplerConfig
 from .state import SamplerState
+from .urn import log_urn_weight
 
 
 class GibbsSampler:
@@ -56,6 +57,7 @@ class GibbsSampler:
             tau2=tau2,
             sigma2=sigma2,
             iteration=0,
+            K_active=len(np.unique(z)),
         )
 
     def sample_step(
@@ -66,25 +68,73 @@ class GibbsSampler:
         n, p = X.shape
         hp = self.hyperparams
 
-        # STEP 1: Update cluster assignments (z) using the previous mixing weights
-        threshold = 1.0 / (2.0 * n)
-        w_safe = np.where(state.w < threshold, 1e-300, state.w)
-        log_w = np.log(w_safe)
-        log_probs = self.backend.compute_cluster_log_probs(
-            X, state.mu, log_w, state.sigma2
-        )
-        max_log = np.max(log_probs, axis=1, keepdims=True)
-        probs = np.exp(log_probs - max_log)
-        probs /= np.sum(probs, axis=1, keepdims=True)
+        # STEP 1: Update cluster assignments (z) using per-observation CRP-style collapsed Gibbs
+        # 1a: Precompute V_n(k) for k in 1..K_max
+        log_V = np.zeros(K_max + 1)
+        for k in range(1, K_max + 1):
+            log_V[k] = log_urn_weight(k, n, hp.alpha, hp.lambda_pois, K_max)
 
-        cumsum = np.cumsum(probs, axis=1)
-        u = rng.uniform(size=(n, 1))
-        z = np.sum(cumsum < u, axis=1)
-        z = np.clip(z, 0, K_max - 1)
+        z = state.z.copy()
+        n_k = np.bincount(z, minlength=K_max)
+        mu = state.mu.copy()
+        
+        # We will iterate over observations and update z sequentially
+        const_term = -0.5 * p * np.log(2 * np.pi) - 0.5 * np.sum(np.log(state.sigma2))
+        
+        for i in range(n):
+            old_k = z[i]
+            n_k[old_k] -= 1
+            
+            active_clusters = np.where(n_k > 0)[0]
+            t = len(active_clusters)
+            
+            # Probability for existing active clusters + new cluster
+            log_probs = np.full(t + 1, -np.inf)
+            
+            if t > 0:
+                diffs = X[i] - mu[active_clusters]
+                ll = const_term - 0.5 * np.sum((diffs ** 2) / state.sigma2, axis=1)
+                log_probs[:t] = np.log(n_k[active_clusters] + hp.alpha) + ll
+                
+            # Probability for a new cluster (t+1)
+            mu_new = None
+            if t < K_max:
+                phi_new = rng.exponential(2.0, size=p)
+                lam_xi = np.where(state.xi == 1, hp.lambda_1, hp.lambda_0)
+                var = phi_new / (lam_xi ** 2)
+                mu_new = rng.normal(0, np.sqrt(var))
+                
+                ll_new = const_term - 0.5 * np.sum(((X[i] - mu_new) ** 2) / state.sigma2)
+                log_ratio_V = log_V[t+1] - log_V[t]
+                log_probs[t] = np.log(hp.alpha) + log_ratio_V + ll_new
+                
+            # Normalize and sample
+            max_log = np.max(log_probs)
+            probs = np.exp(log_probs - max_log)
+            probs /= np.sum(probs)
+            
+            choice = rng.choice(t + 1, p=probs)
+            
+            if choice == t:
+                # Birth: find an empty slot in 0..K_max-1
+                empty_slots = np.where(n_k == 0)[0]
+                new_k = empty_slots[0]
+                z[i] = new_k
+                mu[new_k] = mu_new
+                n_k[new_k] = 1
+            else:
+                chosen_k = active_clusters[choice]
+                z[i] = chosen_k
+                n_k[chosen_k] += 1
+                
+        # Update K_active
+        K_active = int(np.sum(n_k > 0))
 
         # STEP 2: Update cluster mixing weights (w) using the new cluster assignments
-        n_k = np.bincount(z, minlength=K_max)
-        w = rng.dirichlet(hp.alpha + n_k)
+        w = np.zeros(K_max)
+        active = n_k > 0
+        counts_active = n_k[active]
+        w[active] = rng.dirichlet(hp.alpha + counts_active)
 
         # STEP 3: Update joint feature inclusion indicators (xi) using active cluster mask (§7.4)
         xi = np.zeros(p, dtype=np.int32)
@@ -151,6 +201,7 @@ class GibbsSampler:
             tau2=tau2,
             sigma2=sigma2,
             iteration=state.iteration + 1,
+            K_active=K_active,
         )
 
     def run(self, X: np.ndarray, seed: Optional[int] = None) -> List[SamplerState]:
