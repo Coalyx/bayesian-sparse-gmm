@@ -53,6 +53,65 @@ print(f"Feature inclusion probabilities: {model.feature_probabilities_.round(3)}
 labels = model.predict(X)
 ```
 
+## GPU / CUDA Acceleration
+
+The model supports three backends, selected via the `backend` parameter:
+
+| Backend | Value | Description |
+|---------|-------|-------------|
+| NumPy | `"numpy"` | Pure NumPy — always available, no extras needed |
+| Numba CPU | `"numba"` | Parallel CPU via Numba JIT (**default**) |
+| CUDA GPU | `"cuda"` | GPU via CuPy or Numba CUDA |
+| Auto | `"auto"` | Numba CPU if available, else NumPy |
+
+### Install GPU support
+
+```bash
+# CuPy (recommended — more flexible with driver versions)
+pip install "bayesian-sparse-gmm[cuda]"
+# or install directly for your CUDA version, e.g.:
+pip install cupy-cuda12x   # CUDA 12.x
+pip install cupy-cuda11x   # CUDA 11.x
+```
+
+### Run with GPU (Python API)
+
+```python
+model = BayesianSparseGMM(
+    K_max=10,
+    n_iter=500,
+    backend="cuda",   # GPU via CuPy → Numba CUDA → NumPy fallback
+    random_state=42,
+)
+model.fit(X)
+```
+
+### Run with GPU (evaluation script)
+
+```bash
+python evaluate.py --backend cuda
+```
+
+> [!NOTE]
+> **Graceful fallback.** When `backend="cuda"` is requested, the library
+> probes available backends in order: CuPy → Numba CUDA → NumPy. If a GPU
+> backend is unavailable or incompatible, it falls back automatically and
+> emits a `UserWarning` explaining why.
+
+> [!WARNING]
+> **Numba CUDA / PTX version mismatch.** Numba bundles its own CUDA
+> toolkit. If the PTX version Numba generates is newer than what the
+> installed NVIDIA driver supports (e.g., `Unsupported .version 8.7;
+> current version is '8.2'`), Numba CUDA will be disabled automatically.
+> Solutions:
+> - **Preferred:** Install CuPy (`pip install cupy-cuda12x`) — it ships
+>   its own CUDA runtime and handles driver compatibility independently.
+> - **Alternative:** Update the NVIDIA driver (≥ 545 for CUDA 12.3+).
+> - **Alternative:** Pin Numba to a version matching your driver's CUDA
+>   support level.
+
+---
+
 ## Development and Testing
 
 Install development dependencies:
