@@ -45,7 +45,7 @@ def test_numba_backend_equivalence():
     rng3 = np.random.default_rng(42)
     rng4 = np.random.default_rng(42)
     mu_abs = np.abs(mu)
-    lam = np.array([[1.5, 2.5]])
+    lam = np.array([[1.5, 2.5], [1.5, 2.5]])
 
     tau_np = numpy_backend.sample_inverse_gaussian(mu_abs, lam, rng3)
     tau_nb = numba_backend.sample_inverse_gaussian(mu_abs, lam, rng4)

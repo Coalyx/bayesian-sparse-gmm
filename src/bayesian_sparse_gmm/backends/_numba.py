@@ -1,3 +1,4 @@
+import math
 import warnings
 
 import numpy as np
@@ -60,10 +61,10 @@ def _sample_inverse_gaussian_numba(mu_abs, lam, y_noise, u_noise):
     tau2 = np.empty((K_max, p), dtype=mu_abs.dtype)
     for k in prange(K_max):
         for j in range(p):
-            mean = lam[0, j] / (mu_abs[k, j] + 1e-10)
+            mean = lam[k, j] / (mu_abs[k, j] + 1e-10)
             if mean > 1e5:
                 mean = 1e5
-            sh = lam[0, j] ** 2
+            sh = lam[k, j] ** 2
             mean2 = mean**2
             y = y_noise[k, j]
             term = np.sqrt(np.maximum(0.0, 4.0 * mean * sh * y + mean2 * (y**2)))
@@ -121,7 +122,7 @@ def _sample_cluster_means_cuda(sum_x, n_k, tau2, sigma2, noise, out):
         for j in range(p):
             post_var = 1.0 / (nk / sigma2[j] + 1.0 / tau2[k, j])
             post_mean = post_var * (sum_x[k, j] / sigma2[j])
-            out[k, j] = post_mean + np.sqrt(post_var) * noise[k, j]
+            out[k, j] = post_mean + math.sqrt(post_var) * noise[k, j]
 
 
 @cuda.jit
@@ -131,13 +132,13 @@ def _sample_inverse_gaussian_cuda(mu_abs, lam, y_noise, u_noise, out_tau2):
     p = mu_abs.shape[1]
     if k < K_max:
         for j in range(p):
-            mean = lam[0, j] / (mu_abs[k, j] + 1e-10)
+            mean = lam[k, j] / (mu_abs[k, j] + 1e-10)
             if mean > 1e5:
                 mean = 1e5
-            sh = lam[0, j] ** 2
+            sh = lam[k, j] ** 2
             mean2 = mean**2
             y = y_noise[k, j]
-            term = np.sqrt(np.maximum(0.0, 4.0 * mean * sh * y + mean2 * (y**2)))
+            term = math.sqrt(max(0.0, 4.0 * mean * sh * y + mean2 * (y**2)))
             x1 = mean / (1.0 + (mean * y) / (2.0 * sh) + term / (2.0 * sh))
             u = u_noise[k, j]
 
