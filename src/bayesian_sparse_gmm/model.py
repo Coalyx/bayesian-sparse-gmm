@@ -35,6 +35,9 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         Sparsity aggressiveness parameter.
     lambda_pois : float, default=2.0
         Truncated Poisson rate for K prior.
+    use_identity_covariance : bool, default=True
+        If True, use fixed identity covariance I_p (paper §6 default).
+        If False, learn a diagonal per-feature covariance sigma2.
     backend : str, default='auto'
         Computation backend: 'numpy', 'numba', or 'auto'.
     n_jobs : int, default=-1
@@ -60,6 +63,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         lambda_pois: float = 2.0,
         a_sigma: float = 1.0,
         b_sigma: float = 1.0,
+        use_identity_covariance: bool = True,
         backend: str = "auto",
         n_jobs: int = -1,
         random_state: Optional[int] = None,
@@ -78,6 +82,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         self.lambda_pois = lambda_pois
         self.a_sigma = a_sigma
         self.b_sigma = b_sigma
+        self.use_identity_covariance = use_identity_covariance
         self.backend = backend
         self.n_jobs = n_jobs
         self.random_state = random_state
@@ -118,6 +123,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
             lambda_pois=self.lambda_pois,
             a_sigma=self.a_sigma,
             b_sigma=self.b_sigma,
+            use_identity_covariance=self.use_identity_covariance,
         )
 
         self.backend_ = select_backend(config.backend)
@@ -127,7 +133,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
 
         from .postprocessing import align_labels
 
-        self.states_ = align_labels(self.states_)
+        self.states_ = align_labels(self.states_, X)
 
         self.w_ = np.mean([state.w for state in self.states_], axis=0)
         self.means_ = np.mean([state.mu for state in self.states_], axis=0)
@@ -144,6 +150,10 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         for i in range(X.shape[0]):
             labels[i] = np.argmax(np.bincount(z_samples[:, i]))
         self.labels_ = labels
+
+        # K_hat_: posterior mode of active cluster count (paper §10)
+        K_samples = [state.K_active for state in self.states_]
+        self.K_hat_ = int(np.argmax(np.bincount(K_samples)))
 
         return self
 
@@ -197,9 +207,9 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
 
     @property
     def n_clusters_(self) -> int:
-        """Number of active clusters."""
-        check_is_fitted(self, "labels_")
-        return len(np.unique(self.labels_))
+        """Number of clusters (posterior mode of K, paper §10)."""
+        check_is_fitted(self, "K_hat_")
+        return self.K_hat_
 
     @property
     def feature_probabilities_2d_(self) -> np.ndarray:
