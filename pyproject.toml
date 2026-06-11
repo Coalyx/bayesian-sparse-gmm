@@ -43,3 +43,7 @@ packages = ["src/bayesian_sparse_gmm"]
 [tool.isort]
 profile = "black"
 
+[tool.black]
+target-version = ["py39"]
+
+
