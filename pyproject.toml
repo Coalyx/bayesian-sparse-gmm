@@ -39,3 +39,7 @@ path = "src/bayesian_sparse_gmm/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bayesian_sparse_gmm"]
+
+[tool.isort]
+profile = "black"
+
