@@ -33,6 +33,8 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         Prior probability of a feature being informative (Slab).
     kappa : float, default=0.1
         Sparsity aggressiveness parameter.
+    lambda_pois : float, default=2.0
+        Truncated Poisson rate for K prior.
     backend : str, default='auto'
         Computation backend: 'numpy', 'numba', or 'auto'.
     n_jobs : int, default=-1
@@ -55,6 +57,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         alpha: float = 1.0,
         theta: float = 0.5,
         kappa: float = 0.1,
+        lambda_pois: float = 2.0,
         a_sigma: float = 1.0,
         b_sigma: float = 1.0,
         backend: str = "auto",
@@ -72,6 +75,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         self.alpha = alpha
         self.theta = theta
         self.kappa = kappa
+        self.lambda_pois = lambda_pois
         self.a_sigma = a_sigma
         self.b_sigma = b_sigma
         self.backend = backend
@@ -111,6 +115,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
             alpha=self.alpha,
             theta=self.theta,
             kappa=self.kappa,
+            lambda_pois=self.lambda_pois,
             a_sigma=self.a_sigma,
             b_sigma=self.b_sigma,
         )

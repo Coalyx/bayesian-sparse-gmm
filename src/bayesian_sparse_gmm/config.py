@@ -11,6 +11,7 @@ class HyperParams:
     alpha: float = 1.0  # Dirichlet concentration (alpha >= 1.0)
     theta: float = 0.5  # Prior probability of informative features
     kappa: float = 0.1  # Sparsity aggressiveness for beta_theta
+    lambda_pois: float = 2.0  # Truncated Poisson rate for K prior
     a_sigma: float = 1.0
     b_sigma: float = 1.0
 
