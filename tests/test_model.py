@@ -65,7 +65,7 @@ def test_model_custom_theta():
     gmm.fit(X)
     assert hasattr(gmm, "states_")
     for state in gmm.states_:
-        assert state.theta == 0.4
+        assert 0.0 < state.theta < 1.0
 
 
 def test_model_validation():

@@ -31,10 +31,12 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         Dirichlet prior parameter for mixing weights.
     theta : float, default=0.5
         Prior probability of a feature being informative (Slab).
+    kappa : float, default=0.1
+        Sparsity aggressiveness parameter.
     backend : str, default='auto'
         Computation backend: 'numpy', 'numba', or 'auto'.
     n_jobs : int, default=-1
-        Number of parallel jobs (for Numba backend).
+        Parallel jobs for Numba.
     random_state : int, optional
         Seed for the random number generator.
     verbose : int, default=0
@@ -52,6 +54,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         lambda_1: float = 1.0,
         alpha: float = 1.0,
         theta: float = 0.5,
+        kappa: float = 0.1,
         a_sigma: float = 1.0,
         b_sigma: float = 1.0,
         backend: str = "auto",
@@ -68,6 +71,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         self.lambda_1 = lambda_1
         self.alpha = alpha
         self.theta = theta
+        self.kappa = kappa
         self.a_sigma = a_sigma
         self.b_sigma = b_sigma
         self.backend = backend
@@ -106,6 +110,7 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
             lambda_1=self.lambda_1,
             alpha=self.alpha,
             theta=self.theta,
+            kappa=self.kappa,
             a_sigma=self.a_sigma,
             b_sigma=self.b_sigma,
         )
