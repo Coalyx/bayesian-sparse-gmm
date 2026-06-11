@@ -131,10 +131,8 @@ def test_gibbs_sequence_order():
     X = np.zeros((5, 2))
 
     # Setup custom state:
-    # state.z initially has all elements in cluster 0.
-    # state.w concentrates entirely on cluster 1 (so new assignments will be driven to cluster 1).
     z = np.zeros(5, dtype=int)
-    w = np.array([1e-15, 1.0 - 2e-15, 1e-15])
+    w = np.array([1.0, 0.0, 0.0])
     mu = np.zeros((3, 2))
     xi = np.ones(2, dtype=np.int32)
     theta = 0.5
@@ -154,6 +152,10 @@ def test_gibbs_sequence_order():
             self.rng = rng
             self.passed_alpha = None
 
+        def choice(self, a, size=None, replace=True, p=None):
+            # Force choosing the second option to trigger birth/active cluster 1
+            return 1
+
         def dirichlet(self, alpha, size=None):
             self.passed_alpha = alpha
             return self.rng.dirichlet(alpha, size=size)
@@ -164,14 +166,15 @@ def test_gibbs_sequence_order():
     mock_rng = MockGenerator(real_rng)
 
     # Run a single sampler step
-    sampler.sample_step(X, state, mock_rng)
+    next_state = sampler.sample_step(X, state, mock_rng)
 
-    # Under the correct Z-first then W-first sequence:
-    # 1. Z is sampled using state.w (which favors cluster 1). Z will be all 1s.
-    # 2. n_k is computed from the new Z, yielding [0, 5, 0].
-    # 3. W is sampled using Dirichlet(alpha + n_k) = Dirichlet(0.1 + [0, 5, 0]) = [0.1, 5.1, 0.1].
+    # If Z is updated first:
+    # 1. Z is updated. Under choice=1, Z becomes [1, 1, 1, 1, 0].
+    # 2. W is updated using the new Z. Since active clusters is [0, 1], next_state.w should have next_state.w[2] == 0.0.
+    assert np.isclose(next_state.w[2], 0.0)
+    # The dirichlet is called with alpha + counts_active = 0.1 + [1, 4] = [1.1, 4.1]
     assert mock_rng.passed_alpha is not None
-    assert np.allclose(mock_rng.passed_alpha, hp.alpha + np.array([0, 5, 0]))
+    assert np.allclose(mock_rng.passed_alpha, hp.alpha + np.array([1, 4]))
 
 
 def test_sampler_theta_updates():

@@ -2,8 +2,8 @@ import numpy as np
 
 from bayesian_sparse_gmm.backends._numpy import NumpyBackend
 from bayesian_sparse_gmm.config import HyperParams, SamplerConfig
-from bayesian_sparse_gmm.sampler import GibbsSampler
 from bayesian_sparse_gmm.model import BayesianSparseGMM
+from bayesian_sparse_gmm.sampler import GibbsSampler
 
 
 def test_theta_range_and_updates():
