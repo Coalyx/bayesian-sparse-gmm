@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 import time
@@ -13,7 +14,7 @@ from sklearn.model_selection import train_test_split
 from bayesian_sparse_gmm.model import BayesianSparseGMM
 from bayesian_sparse_gmm.diagnostics import gelman_rubin, effective_sample_size
 
-def run_olivetti_benchmark():
+def run_olivetti_benchmark(backend="numba"):
     """Evaluate on Olivetti Faces (p=4096, K=40)."""
     print("\n" + "=" * 60)
     print("OLIVETTI FACES BENCHMARK (n=400, p=4096, K=40)")
@@ -43,7 +44,7 @@ def run_olivetti_benchmark():
         theta=0.5,
         a_sigma=1.0,
         b_sigma=1.0,
-        backend="numba",
+        backend=backend,
         random_state=42,
         verbose=1,
     )
@@ -109,7 +110,7 @@ def run_olivetti_benchmark():
     print("Saved './visualize/olivetti_features.png'")
 
 
-def run_text_benchmark():
+def run_text_benchmark(backend="numba"):
     """Evaluate on 20 Newsgroups text data (LSA-reduced)."""
     print("\n" + "=" * 60)
     print("20 NEWSGROUPS TEXT BENCHMARK (LSA-reduced)")
@@ -138,7 +139,7 @@ def run_text_benchmark():
         theta=0.5,
         a_sigma=1.0,
         b_sigma=1.0,
-        backend="numba",
+        backend=backend,
         random_state=42,
         verbose=1,
     )
@@ -159,7 +160,7 @@ def run_text_benchmark():
     print(f"KMeans           - ARI: {ari_k:.4f} | AMI: {ami_k:.4f}")
 
 
-def run_synthetic_sparse_benchmark():
+def run_synthetic_sparse_benchmark(backend="numba"):
     """Synthetic data: 6 clusters in 60-dim space, only 10/60 features are informative."""
     print("\n" + "=" * 60)
     print("SYNTHETIC SPARSE SIGNAL BENCHMARK (n=600, p=60, K=6, signal=10)")
@@ -184,7 +185,7 @@ def run_synthetic_sparse_benchmark():
         K_max=10, n_iter=500, burn_in=100, thinning=1,
         lambda_0=100.0, lambda_1=1.0, alpha=1.0, theta=0.5,
         a_sigma=1.0, b_sigma=1.0,
-        backend="numba", random_state=42, verbose=1,
+        backend=backend, random_state=42, verbose=1,
     )
     gmm.fit(X)
     bsgmm_time = time.time() - t0
@@ -238,7 +239,7 @@ def run_synthetic_sparse_benchmark():
     print("Saved './visualize/synthetic_sparse.png'")
 
 
-def run_digits_benchmark():
+def run_digits_benchmark(backend="numba"):
     """Sklearn Digits: 1797 samples, 64 features (8x8 images), K=10 digit classes."""
     print("\n" + "=" * 60)
     print("SKLEARN DIGITS BENCHMARK (n=1797, p=64, K=10)")
@@ -255,7 +256,7 @@ def run_digits_benchmark():
         K_max=15, n_iter=600, burn_in=150, thinning=2,
         lambda_0=100.0, lambda_1=1.0, alpha=1.0, theta=0.5,
         a_sigma=1.0, b_sigma=1.0,
-        backend="numba", random_state=42, verbose=1,
+        backend=backend, random_state=42, verbose=1,
     )
     gmm.fit(X)
     bsgmm_time = time.time() - t0
@@ -322,7 +323,7 @@ def run_digits_benchmark():
     print("Saved './visualize/digits_clusters.png'")
 
 
-def run_wine_benchmark():
+def run_wine_benchmark(backend="numba"):
     """Wine dataset: 178 samples, 13 chemical features, K=3 cultivars."""
     print("\n" + "=" * 60)
     print("WINE BENCHMARK (n=178, p=13, K=3 cultivars)")
@@ -339,7 +340,7 @@ def run_wine_benchmark():
         K_max=6, n_iter=500, burn_in=100, thinning=1,
         lambda_0=100.0, lambda_1=1.0, alpha=1.0, theta=0.5,
         a_sigma=1.0, b_sigma=1.0,
-        backend="numba", random_state=42, verbose=1,
+        backend=backend, random_state=42, verbose=1,
     )
     gmm.fit(X)
     bsgmm_time = time.time() - t0
@@ -405,8 +406,17 @@ def run_wine_benchmark():
 
 
 if __name__ == "__main__":
-    run_olivetti_benchmark()
-    run_text_benchmark()
-    run_synthetic_sparse_benchmark()
-    run_digits_benchmark()
-    run_wine_benchmark()
+    parser = argparse.ArgumentParser(description="Bayesian Sparse GMM benchmarks")
+    parser.add_argument(
+        "--backend",
+        default="numba",
+        choices=["numpy", "numba", "cuda", "auto"],
+        help="Compute backend (default: numba)",
+    )
+    args = parser.parse_args()
+
+    run_olivetti_benchmark(backend=args.backend)
+    run_text_benchmark(backend=args.backend)
+    run_synthetic_sparse_benchmark(backend=args.backend)
+    run_digits_benchmark(backend=args.backend)
+    run_wine_benchmark(backend=args.backend)
