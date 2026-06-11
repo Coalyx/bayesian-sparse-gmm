@@ -1,3 +1,4 @@
+import warnings
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -102,6 +103,23 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
                 "lambda_0 must be > lambda_1 (spike > slab). "
                 f"Got lambda_0={self.lambda_0}, lambda_1={self.lambda_1}."
             )
+
+        # Warn if identity covariance is used with non-unit-variance features.
+        # The paper (§6) assumes identity covariance, which implicitly requires
+        # features to have approximately unit variance. Without this, the
+        # likelihood becomes too flat in high dimensions, causing cluster collapse.
+        if self.use_identity_covariance:
+            feat_var = np.var(X, axis=0)
+            mean_var = float(np.mean(feat_var))
+            if mean_var < 0.5 or mean_var > 2.0:
+                warnings.warn(
+                    f"Feature variance mean={mean_var:.4f} deviates significantly "
+                    "from 1.0. With use_identity_covariance=True, data should be "
+                    "standardized to unit variance (e.g. sklearn.preprocessing."
+                    "StandardScaler) to prevent cluster collapse in high dimensions.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
         config = SamplerConfig(
             K_max=self.K_max,

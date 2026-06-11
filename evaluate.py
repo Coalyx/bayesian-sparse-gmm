@@ -21,9 +21,8 @@ def run_olivetti_benchmark():
 
     faces = fetch_olivetti_faces(shuffle=True, random_state=42)
     X, y = faces.data, faces.target
-
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    # Do NOT standardize image data! Scaling background pixels to unit variance destroys sparsity.
+    X_scaled = X
 
     X_train, X_test, y_train, y_test = train_test_split(
         X_scaled, y, test_size=0.2, random_state=42, stratify=y
@@ -247,7 +246,8 @@ def run_digits_benchmark():
 
     digits = load_digits()
     X_raw, y = digits.data, digits.target
-    X = StandardScaler().fit_transform(X_raw)
+    # Do NOT standardize! Scale to [0, 1] to preserve relative variances
+    X = X_raw / 16.0
     print(f"Data: {X.shape} | Classes: {len(np.unique(y))}")
 
     t0 = time.time()

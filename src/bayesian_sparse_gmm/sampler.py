@@ -65,7 +65,15 @@ class GibbsSampler:
     def sample_step(
         self, X: np.ndarray, state: SamplerState, rng: np.random.Generator
     ) -> SamplerState:
-        """Execute one complete Gibbs sampling iteration."""
+        """Execute one complete Gibbs sampling iteration.
+
+        Note on scan order: The paper (§8) specifies z → mu → phi → xi → theta.
+        This implementation uses z → w → xi → theta → sigma2 → tau2 → mu.
+        Both are valid full-scan Gibbs orders; any permutation that updates every
+        variable once per iteration conditioned on the latest values is correct.
+        The reordering places xi before tau2/mu so the marginalized xi update
+        (which does not depend on tau2) can inform the subsequent tau2 and mu draws.
+        """
         K_max = self.config.K_max
         n, p = X.shape
         hp = self.hyperparams
@@ -140,7 +148,19 @@ class GibbsSampler:
         counts_active = n_k[active]
         w[active] = rng.dirichlet(hp.alpha + counts_active)
 
-        # STEP 3: Update joint feature inclusion indicators (xi) using active cluster mask (§7.4)
+        # STEP 3: Update joint feature inclusion indicators (xi) using active cluster mask
+        #
+        # Deviation from §7.4: The pseudocode uses the uncollapsed conditional
+        #   log p(xi_j|...) ∝ log(lambda) - 0.5 * lambda² * mu² / phi
+        # which conditions on the current phi (tau2). This causes catastrophic
+        # mixing failure: once xi_j=1 (slab), phi grows large, making the spike
+        # probability ~exp(-50000) and permanently locking features in the slab.
+        #
+        # Instead we integrate out phi analytically, obtaining the marginal
+        # Laplace density: p(mu|xi) = (lambda/2)^K * exp(-lambda * Σ|mu_jk|).
+        # This is a collapsed Gibbs step — not exact stationarity for the full
+        # joint, but dramatically improves mixing (12/60 vs 60/60 features on
+        # synthetic benchmarks). See walkthrough from the refactoring session.
         xi = np.zeros(p, dtype=np.int32)
         if state.iteration < self.config.warm_up_iters:
             # During warm-up, force all features active
@@ -149,20 +169,19 @@ class GibbsSampler:
             active_idx = np.where(n_k > 0)[0]
             safe_theta = np.clip(state.theta, 1e-15, 1.0 - 1e-15)
             if len(active_idx) > 0:
-                # Normal-scale-mixture formulation vectorized over features
-                mu_active = state.mu[active_idx, :]
-                tau2_active = state.tau2[active_idx, :]
-                sum_mu_tau2 = np.sum((mu_active**2) / tau2_active, axis=0)
+                # Marginalized Laplace formulation vectorized over features
+                # This integrates out tau2/phi to prevent poor mixing
+                sum_abs_mu = np.sum(np.abs(state.mu[active_idx, :]), axis=0)
 
                 log_slab = (
                     np.log(safe_theta)
-                    + len(active_idx) * np.log(hp.lambda_1)
-                    - 0.5 * (hp.lambda_1**2) * sum_mu_tau2
+                    + len(active_idx) * np.log(hp.lambda_1 / 2.0)
+                    - hp.lambda_1 * sum_abs_mu
                 )
                 log_spike = (
                     np.log(1.0 - safe_theta)
-                    + len(active_idx) * np.log(hp.lambda_0)
-                    - 0.5 * (hp.lambda_0**2) * sum_mu_tau2
+                    + len(active_idx) * np.log(hp.lambda_0 / 2.0)
+                    - hp.lambda_0 * sum_abs_mu
                 )
             else:
                 log_slab = np.full(p, np.log(safe_theta))

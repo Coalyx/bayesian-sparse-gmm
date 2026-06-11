@@ -47,10 +47,11 @@ def log_urn_weight(
         if probs[K - 1] <= 0:
             continue
         log_p = np.log(probs[K - 1])
-        log_rf_K_k = log_rising_factorial(K, k)
+        # Numerator uses falling factorial: K! / (K-k)!
+        log_ff_K_k = float(gammaln(K + 1) - gammaln(K - k + 1))
         log_rf_alpha_K_n = log_rising_factorial(alpha * K, n)
 
-        term_logs.append(log_p + log_rf_K_k - log_rf_alpha_K_n)
+        term_logs.append(log_p + log_ff_K_k - log_rf_alpha_K_n)
 
     if not term_logs:
         return -np.inf
