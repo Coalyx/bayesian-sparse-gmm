@@ -154,6 +154,7 @@ def _sample_inverse_gaussian_cuda(mu_abs, lam, y_noise, u_noise, out_tau2):
 # Numba backend class wrapper
 # =====================================================================
 
+
 def _probe_numba_cuda() -> bool:
     """Test-link a trivial kernel to verify PTX/driver compatibility."""
     try:

@@ -2,17 +2,28 @@ import argparse
 import os
 import sys
 import time
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.datasets import fetch_olivetti_faces, fetch_20newsgroups_vectorized, load_digits, load_wine
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import TruncatedSVD, PCA
-from sklearn.cluster import KMeans
-from sklearn.metrics import adjusted_rand_score, adjusted_mutual_info_score, v_measure_score
-from sklearn.model_selection import train_test_split
 
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.datasets import (
+    fetch_20newsgroups_vectorized,
+    fetch_olivetti_faces,
+    load_digits,
+    load_wine,
+)
+from sklearn.decomposition import PCA, TruncatedSVD
+from sklearn.metrics import (
+    adjusted_mutual_info_score,
+    adjusted_rand_score,
+    v_measure_score,
+)
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+
+from bayesian_sparse_gmm.diagnostics import effective_sample_size, gelman_rubin
 from bayesian_sparse_gmm.model import BayesianSparseGMM
-from bayesian_sparse_gmm.diagnostics import gelman_rubin, effective_sample_size
+
 
 def run_olivetti_benchmark(backend="numba"):
     """Evaluate on Olivetti Faces (p=4096, K=40)."""
@@ -28,7 +39,9 @@ def run_olivetti_benchmark(backend="numba"):
     X_train, X_test, y_train, y_test = train_test_split(
         X_scaled, y, test_size=0.2, random_state=42, stratify=y
     )
-    print(f"Train: {X_train.shape} | Test: {X_test.shape} | Classes: {len(np.unique(y))}")
+    print(
+        f"Train: {X_train.shape} | Test: {X_test.shape} | Classes: {len(np.unique(y))}"
+    )
 
     # --- BSGMM ---
     t0 = time.time()
@@ -65,8 +78,12 @@ def run_olivetti_benchmark(backend="numba"):
     vm_b = v_measure_score(y_train, gmm.labels_)
     vm_k = v_measure_score(y_train, kmeans.labels_)
 
-    print(f"\nBSGMM  ({bsgmm_time:.1f}s) - ARI: {ari_b:.4f} | AMI: {ami_b:.4f} | V: {vm_b:.4f}")
-    print(f"KMeans ({kmeans_time:.1f}s) - ARI: {ari_k:.4f} | AMI: {ami_k:.4f} | V: {vm_k:.4f}")
+    print(
+        f"\nBSGMM  ({bsgmm_time:.1f}s) - ARI: {ari_b:.4f} | AMI: {ami_b:.4f} | V: {vm_b:.4f}"
+    )
+    print(
+        f"KMeans ({kmeans_time:.1f}s) - ARI: {ari_k:.4f} | AMI: {ami_k:.4f} | V: {vm_k:.4f}"
+    )
 
     # --- Probabilistic fit ---
     test_ll = gmm.score(X_test)
@@ -116,7 +133,7 @@ def run_text_benchmark(backend="numba"):
     print("20 NEWSGROUPS TEXT BENCHMARK (LSA-reduced)")
     print("=" * 60)
 
-    newsgroups = fetch_20newsgroups_vectorized(subset='all')
+    newsgroups = fetch_20newsgroups_vectorized(subset="all")
     X_sparse, y = newsgroups.data, newsgroups.target
 
     # LSA dimensionality reduction (preserves Gaussian-like structure)
@@ -156,7 +173,9 @@ def run_text_benchmark(backend="numba"):
     ami_k = adjusted_mutual_info_score(y, kmeans.labels_)
 
     n_sel = len(gmm.selected_features_)
-    print(f"\nBSGMM  ({bsgmm_time:.1f}s) - ARI: {ari_b:.4f} | AMI: {ami_b:.4f} | Features: {n_sel}/100")
+    print(
+        f"\nBSGMM  ({bsgmm_time:.1f}s) - ARI: {ari_b:.4f} | AMI: {ami_b:.4f} | Features: {n_sel}/100"
+    )
     print(f"KMeans           - ARI: {ari_k:.4f} | AMI: {ami_k:.4f}")
 
 
@@ -170,22 +189,35 @@ def run_synthetic_sparse_benchmark(backend="numba"):
     K_true, n_per_k, p_total, p_signal = 6, 100, 60, 10
     means = np.zeros((K_true, p_total))
     means[:, :p_signal] = rng_d.normal(0, 3.0, size=(K_true, p_signal))
-    X_parts = [rng_d.normal(means[k], 1.0, size=(n_per_k, p_total)) for k in range(K_true)]
+    X_parts = [
+        rng_d.normal(means[k], 1.0, size=(n_per_k, p_total)) for k in range(K_true)
+    ]
     y_parts = [np.full(n_per_k, k) for k in range(K_true)]
     X_raw = np.vstack(X_parts)
     y = np.hstack(y_parts)
     shuf = rng_d.permutation(len(y))
     X_raw, y = X_raw[shuf], y[shuf]
-    print(f"Data: {X_raw.shape} | True K={K_true} | Signal={p_signal}/{p_total} features")
+    print(
+        f"Data: {X_raw.shape} | True K={K_true} | Signal={p_signal}/{p_total} features"
+    )
 
     X = StandardScaler().fit_transform(X_raw)
 
     t0 = time.time()
     gmm = BayesianSparseGMM(
-        K_max=10, n_iter=500, burn_in=100, thinning=1,
-        lambda_0=100.0, lambda_1=1.0, alpha=1.0, theta=0.5,
-        a_sigma=1.0, b_sigma=1.0,
-        backend=backend, random_state=42, verbose=1,
+        K_max=10,
+        n_iter=500,
+        burn_in=100,
+        thinning=1,
+        lambda_0=100.0,
+        lambda_1=1.0,
+        alpha=1.0,
+        theta=0.5,
+        a_sigma=1.0,
+        b_sigma=1.0,
+        backend=backend,
+        random_state=42,
+        verbose=1,
     )
     gmm.fit(X)
     bsgmm_time = time.time() - t0
@@ -202,9 +234,13 @@ def run_synthetic_sparse_benchmark(backend="numba"):
     true_sig = set(range(p_signal))
     sel = set(gmm.selected_features_)
     prec = len(sel & true_sig) / max(n_sel, 1)
-    rec  = len(sel & true_sig) / p_signal
-    print(f"\nBSGMM  ({bsgmm_time:.1f}s) - ARI: {ari_b:.4f} | AMI: {ami_b:.4f} | Features: {n_sel}/{p_total}")
-    print(f"KMeans ({km_time:.1f}s) - ARI: {ari_k:.4f} | AMI: {adjusted_mutual_info_score(y, km.labels_):.4f}")
+    rec = len(sel & true_sig) / p_signal
+    print(
+        f"\nBSGMM  ({bsgmm_time:.1f}s) - ARI: {ari_b:.4f} | AMI: {ami_b:.4f} | Features: {n_sel}/{p_total}"
+    )
+    print(
+        f"KMeans ({km_time:.1f}s) - ARI: {ari_k:.4f} | AMI: {adjusted_mutual_info_score(y, km.labels_):.4f}"
+    )
     print(f"Feature Selection  - Precision: {prec:.2%} | Recall: {rec:.2%}")
 
     X_2d = PCA(n_components=2, random_state=42).fit_transform(X)
@@ -214,22 +250,29 @@ def run_synthetic_sparse_benchmark(backend="numba"):
 
     for k in range(K_true):
         m = y == k
-        axes[0].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal[k]], s=18, alpha=0.75, label=f"C{k}")
+        axes[0].scatter(
+            X_2d[m, 0], X_2d[m, 1], c=[pal[k]], s=18, alpha=0.75, label=f"C{k}"
+        )
     axes[0].set_title(f"Ground Truth (K={K_true})")
-    axes[0].set_xlabel("PC1"); axes[0].set_ylabel("PC2")
+    axes[0].set_xlabel("PC1")
+    axes[0].set_ylabel("PC2")
     axes[0].legend(fontsize=7, ncol=2)
 
     for idx, k in enumerate(np.unique(gmm.labels_)):
         m = gmm.labels_ == k
         axes[1].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal[idx % 10]], s=18, alpha=0.75)
     axes[1].set_title(f"BSGMM (ARI={ari_b:.3f}, K={len(np.unique(gmm.labels_))})")
-    axes[1].set_xlabel("PC1"); axes[1].set_ylabel("PC2")
+    axes[1].set_xlabel("PC1")
+    axes[1].set_ylabel("PC2")
 
     bar_c = ["#e74c3c" if i in true_sig else "#bdc3c7" for i in range(p_total)]
     axes[2].bar(range(p_total), gmm.feature_probabilities_, color=bar_c, alpha=0.85)
     axes[2].axhline(0.5, color="k", ls="--", lw=1, label="threshold")
-    axes[2].set_xlabel("Feature index"); axes[2].set_ylabel("P(ξ=1|X)")
-    axes[2].set_title(f"Feature Importance (red=signal | Prec={prec:.0%}, Rec={rec:.0%})")
+    axes[2].set_xlabel("Feature index")
+    axes[2].set_ylabel("P(ξ=1|X)")
+    axes[2].set_title(
+        f"Feature Importance (red=signal | Prec={prec:.0%}, Rec={rec:.0%})"
+    )
     axes[2].legend(fontsize=9)
 
     plt.tight_layout()
@@ -253,10 +296,19 @@ def run_digits_benchmark(backend="numba"):
 
     t0 = time.time()
     gmm = BayesianSparseGMM(
-        K_max=15, n_iter=600, burn_in=150, thinning=2,
-        lambda_0=100.0, lambda_1=1.0, alpha=1.0, theta=0.5,
-        a_sigma=1.0, b_sigma=1.0,
-        backend=backend, random_state=42, verbose=1,
+        K_max=15,
+        n_iter=600,
+        burn_in=150,
+        thinning=2,
+        lambda_0=100.0,
+        lambda_1=1.0,
+        alpha=1.0,
+        theta=0.5,
+        a_sigma=1.0,
+        b_sigma=1.0,
+        backend=backend,
+        random_state=42,
+        verbose=1,
     )
     gmm.fit(X)
     bsgmm_time = time.time() - t0
@@ -271,7 +323,9 @@ def run_digits_benchmark(backend="numba"):
     ami_b = adjusted_mutual_info_score(y, gmm.labels_)
     ami_k = adjusted_mutual_info_score(y, km.labels_)
     n_sel = len(gmm.selected_features_)
-    print(f"\nBSGMM  ({bsgmm_time:.1f}s) - ARI: {ari_b:.4f} | AMI: {ami_b:.4f} | Features: {n_sel}/64")
+    print(
+        f"\nBSGMM  ({bsgmm_time:.1f}s) - ARI: {ari_b:.4f} | AMI: {ami_b:.4f} | Features: {n_sel}/64"
+    )
     print(f"KMeans ({km_time:.1f}s) - ARI: {ari_k:.4f} | AMI: {ami_k:.4f}")
 
     X_2d = PCA(n_components=2, random_state=42).fit_transform(X)
@@ -286,7 +340,8 @@ def run_digits_benchmark(backend="numba"):
         m = y == k
         ax1.scatter(X_2d[m, 0], X_2d[m, 1], c=[pal[k]], s=10, alpha=0.6, label=str(k))
     ax1.set_title("Ground Truth Digits")
-    ax1.set_xlabel("PC1"); ax1.set_ylabel("PC2")
+    ax1.set_xlabel("PC1")
+    ax1.set_ylabel("PC2")
     ax1.legend(fontsize=7, ncol=2, markerscale=1.5)
 
     # Top-middle: PCA scatter colored by BSGMM clusters
@@ -298,7 +353,8 @@ def run_digits_benchmark(backend="numba"):
         m = gmm.labels_ == k
         ax2.scatter(X_2d[m, 0], X_2d[m, 1], c=[pal2[idx % 20]], s=10, alpha=0.6)
     ax2.set_title(f"BSGMM (ARI={ari_b:.3f}, K={n_pred})")
-    ax2.set_xlabel("PC1"); ax2.set_ylabel("PC2")
+    ax2.set_xlabel("PC1")
+    ax2.set_ylabel("PC2")
 
     # Top-right: Feature importance heatmap (8x8)
     ax3 = fig.add_subplot(2, 3, 3)
@@ -337,10 +393,19 @@ def run_wine_benchmark(backend="numba"):
 
     t0 = time.time()
     gmm = BayesianSparseGMM(
-        K_max=6, n_iter=500, burn_in=100, thinning=1,
-        lambda_0=100.0, lambda_1=1.0, alpha=1.0, theta=0.5,
-        a_sigma=1.0, b_sigma=1.0,
-        backend=backend, random_state=42, verbose=1,
+        K_max=6,
+        n_iter=500,
+        burn_in=100,
+        thinning=1,
+        lambda_0=100.0,
+        lambda_1=1.0,
+        alpha=1.0,
+        theta=0.5,
+        a_sigma=1.0,
+        b_sigma=1.0,
+        backend=backend,
+        random_state=42,
+        verbose=1,
     )
     gmm.fit(X)
     bsgmm_time = time.time() - t0
@@ -355,7 +420,9 @@ def run_wine_benchmark(backend="numba"):
     ami_b = adjusted_mutual_info_score(y, gmm.labels_)
     ami_k = adjusted_mutual_info_score(y, km.labels_)
     n_sel = len(gmm.selected_features_)
-    print(f"\nBSGMM  ({bsgmm_time:.1f}s) - ARI: {ari_b:.4f} | AMI: {ami_b:.4f} | Features: {n_sel}/13")
+    print(
+        f"\nBSGMM  ({bsgmm_time:.1f}s) - ARI: {ari_b:.4f} | AMI: {ami_b:.4f} | Features: {n_sel}/13"
+    )
     print(f"KMeans ({km_time:.1f}s) - ARI: {ari_k:.4f} | AMI: {ami_k:.4f}")
     print(f"Selected features: {[feat_names[i] for i in gmm.selected_features_]}")
 
@@ -368,9 +435,12 @@ def run_wine_benchmark(backend="numba"):
     # Panel 1: Ground truth PCA
     for k in range(3):
         m = y == k
-        axes[0].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal[k]], s=40, alpha=0.8, label=f"Cultivar {k+1}")
+        axes[0].scatter(
+            X_2d[m, 0], X_2d[m, 1], c=[pal[k]], s=40, alpha=0.8, label=f"Cultivar {k+1}"
+        )
     axes[0].set_title(f"Ground Truth (K=3)")
-    axes[0].set_xlabel("PC1"); axes[0].set_ylabel("PC2")
+    axes[0].set_xlabel("PC1")
+    axes[0].set_ylabel("PC2")
     axes[0].legend()
 
     # Panel 2: BSGMM predicted
@@ -379,18 +449,29 @@ def run_wine_benchmark(backend="numba"):
     pal2 = plt.cm.Set2(np.linspace(0, 0.7, max(n_pred, 2)))
     for idx, k in enumerate(unique_labels_w):
         m = gmm.labels_ == k
-        axes[1].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal2[idx % len(pal2)]], s=40, alpha=0.8, label=f"C{k}")
+        axes[1].scatter(
+            X_2d[m, 0],
+            X_2d[m, 1],
+            c=[pal2[idx % len(pal2)]],
+            s=40,
+            alpha=0.8,
+            label=f"C{k}",
+        )
     axes[1].set_title(f"BSGMM (ARI={ari_b:.3f}, K={n_pred})")
-    axes[1].set_xlabel("PC1"); axes[1].set_ylabel("PC2")
+    axes[1].set_xlabel("PC1")
+    axes[1].set_ylabel("PC2")
     axes[1].legend()
 
     # Panel 3: Feature importance bar chart
     sorted_idx = np.argsort(gmm.feature_probabilities_)[::-1]
-    bar_c = ["#e74c3c" if i in gmm.selected_features_ else "#bdc3c7" for i in sorted_idx]
+    bar_c = [
+        "#e74c3c" if i in gmm.selected_features_ else "#bdc3c7" for i in sorted_idx
+    ]
     axes[2].barh(
         range(len(feat_names)),
         gmm.feature_probabilities_[sorted_idx],
-        color=bar_c, alpha=0.85
+        color=bar_c,
+        alpha=0.85,
     )
     axes[2].set_yticks(range(len(feat_names)))
     axes[2].set_yticklabels([feat_names[i] for i in sorted_idx], fontsize=8)
