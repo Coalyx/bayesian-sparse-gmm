@@ -1,9 +1,10 @@
 import numpy as np
+
 from bayesian_sparse_gmm.urn import (
     log_rising_factorial,
+    log_urn_weight,
     truncated_poisson_pmf,
     urn_weight,
-    log_urn_weight,
 )
 
 

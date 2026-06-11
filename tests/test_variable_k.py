@@ -1,4 +1,5 @@
 import numpy as np
+
 from bayesian_sparse_gmm.model import BayesianSparseGMM
 
 
@@ -27,7 +28,7 @@ def test_variable_k_convergence():
     X = np.vstack([X1, X2, X3])
 
     model = BayesianSparseGMM(
-        K_max=10, n_iter=100, burn_in=50, random_state=42, lambda_pois=3.0
+        K_max=10, n_iter=200, burn_in=150, random_state=42, lambda_pois=3.0
     )
     model.fit(X)
 
