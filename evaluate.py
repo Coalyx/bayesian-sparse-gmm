@@ -21,8 +21,8 @@ def run_olivetti_benchmark():
 
     faces = fetch_olivetti_faces(shuffle=True, random_state=42)
     X, y = faces.data, faces.target
-    # Do NOT standardize image data! Scaling background pixels to unit variance destroys sparsity.
-    X_scaled = X
+    # Standardize: identity covariance requires unit-variance features
+    X_scaled = StandardScaler().fit_transform(X)
 
     X_train, X_test, y_train, y_test = train_test_split(
         X_scaled, y, test_size=0.2, random_state=42, stratify=y
@@ -218,9 +218,9 @@ def run_synthetic_sparse_benchmark():
     axes[0].set_xlabel("PC1"); axes[0].set_ylabel("PC2")
     axes[0].legend(fontsize=7, ncol=2)
 
-    for k in np.unique(gmm.labels_):
+    for idx, k in enumerate(np.unique(gmm.labels_)):
         m = gmm.labels_ == k
-        axes[1].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal[k % 10]], s=18, alpha=0.75)
+        axes[1].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal[idx % 10]], s=18, alpha=0.75)
     axes[1].set_title(f"BSGMM (ARI={ari_b:.3f}, K={len(np.unique(gmm.labels_))})")
     axes[1].set_xlabel("PC1"); axes[1].set_ylabel("PC2")
 
@@ -246,8 +246,8 @@ def run_digits_benchmark():
 
     digits = load_digits()
     X_raw, y = digits.data, digits.target
-    # Do NOT standardize! Scale to [0, 1] to preserve relative variances
-    X = X_raw / 16.0
+    # Standardize: identity covariance requires unit-variance features
+    X = StandardScaler().fit_transform(X_raw)
     print(f"Data: {X.shape} | Classes: {len(np.unique(y))}")
 
     t0 = time.time()
@@ -290,11 +290,12 @@ def run_digits_benchmark():
 
     # Top-middle: PCA scatter colored by BSGMM clusters
     ax2 = fig.add_subplot(2, 3, 2)
-    n_pred = len(np.unique(gmm.labels_))
-    pal2 = plt.cm.tab20(np.linspace(0, 1, max(n_pred, 1)))
-    for k in np.unique(gmm.labels_):
+    unique_labels = np.unique(gmm.labels_)
+    n_pred = len(unique_labels)
+    pal2 = plt.cm.tab20(np.linspace(0, 1, max(n_pred, 2)))
+    for idx, k in enumerate(unique_labels):
         m = gmm.labels_ == k
-        ax2.scatter(X_2d[m, 0], X_2d[m, 1], c=[pal2[k % 20]], s=10, alpha=0.6)
+        ax2.scatter(X_2d[m, 0], X_2d[m, 1], c=[pal2[idx % 20]], s=10, alpha=0.6)
     ax2.set_title(f"BSGMM (ARI={ari_b:.3f}, K={n_pred})")
     ax2.set_xlabel("PC1"); ax2.set_ylabel("PC2")
 
@@ -372,11 +373,12 @@ def run_wine_benchmark():
     axes[0].legend()
 
     # Panel 2: BSGMM predicted
-    n_pred = len(np.unique(gmm.labels_))
-    pal2 = plt.cm.Set2(np.linspace(0, 0.7, max(n_pred, 1)))
-    for k in np.unique(gmm.labels_):
+    unique_labels_w = np.unique(gmm.labels_)
+    n_pred = len(unique_labels_w)
+    pal2 = plt.cm.Set2(np.linspace(0, 0.7, max(n_pred, 2)))
+    for idx, k in enumerate(unique_labels_w):
         m = gmm.labels_ == k
-        axes[1].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal2[k % len(pal2)]], s=40, alpha=0.8, label=f"C{k}")
+        axes[1].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal2[idx % len(pal2)]], s=40, alpha=0.8, label=f"C{k}")
     axes[1].set_title(f"BSGMM (ARI={ari_b:.3f}, K={n_pred})")
     axes[1].set_xlabel("PC1"); axes[1].set_ylabel("PC2")
     axes[1].legend()
