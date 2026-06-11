@@ -22,12 +22,12 @@ def test_state():
     z = np.zeros(10, dtype=int)
     w = np.ones(5) / 5.0
     mu = np.zeros((5, 3))
-    gamma = np.ones((5, 3), dtype=int)
+    xi = np.zeros(3, dtype=int)
     tau2 = np.ones((5, 3))
     sigma2 = np.ones(3)
 
     state = SamplerState(
-        z=z, w=w, mu=mu, gamma=gamma, theta=0.5, tau2=tau2, sigma2=sigma2, iteration=0
+        z=z, w=w, mu=mu, xi=xi, theta=0.5, tau2=tau2, sigma2=sigma2, iteration=0
     )
     assert state.iteration == 0
     assert state.theta == 0.5

@@ -10,7 +10,7 @@ class SamplerState:
     z: np.ndarray
     w: np.ndarray
     mu: np.ndarray
-    gamma: np.ndarray
+    xi: np.ndarray
     theta: float
     tau2: np.ndarray
     sigma2: np.ndarray
