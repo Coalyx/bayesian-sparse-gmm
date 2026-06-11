@@ -86,11 +86,6 @@ model = BayesianSparseGMM(
 model.fit(X)
 ```
 
-### Run with GPU (evaluation script)
-
-```bash
-python evaluate.py --backend cuda
-```
 
 > [!NOTE]
 > **Graceful fallback.** When `backend="cuda"` is requested, the library
