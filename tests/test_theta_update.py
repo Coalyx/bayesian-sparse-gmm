@@ -86,7 +86,9 @@ def test_high_p_sparsity():
 def test_theta_trace():
     """Verify that theta varies across MCMC iterations in the model trace."""
     X = np.random.normal(size=(30, 10))
-    model = BayesianSparseGMM(K_max=2, n_iter=20, burn_in=5, thinning=1, random_state=42)
+    model = BayesianSparseGMM(
+        K_max=2, n_iter=20, burn_in=5, thinning=1, random_state=42
+    )
     model.fit(X)
 
     trace_theta = model.trace_["theta"]

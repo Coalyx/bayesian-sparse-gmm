@@ -15,4 +15,4 @@ class SamplerState:
     tau2: np.ndarray
     sigma2: np.ndarray
     iteration: int
-    K_active: int
+    K_active: int = 0

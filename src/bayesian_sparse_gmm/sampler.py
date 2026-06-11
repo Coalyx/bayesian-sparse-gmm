@@ -23,7 +23,9 @@ class GibbsSampler:
         """Initialize the sampler state using K-Means++ or random assignment."""
         n, p = X.shape
         K_max = self.config.K_max
-        self.beta_theta = p ** (1 + self.hyperparams.kappa) / np.maximum(np.log(p), 1e-10)
+        self.beta_theta = p ** (1 + self.hyperparams.kappa) / np.maximum(
+            np.log(p), 1e-10
+        )
 
         try:
             from sklearn.cluster import KMeans
@@ -77,44 +79,46 @@ class GibbsSampler:
         z = state.z.copy()
         n_k = np.bincount(z, minlength=K_max)
         mu = state.mu.copy()
-        
+
         # We will iterate over observations and update z sequentially
         const_term = -0.5 * p * np.log(2 * np.pi) - 0.5 * np.sum(np.log(state.sigma2))
-        
+
         for i in range(n):
             old_k = z[i]
             n_k[old_k] -= 1
-            
+
             active_clusters = np.where(n_k > 0)[0]
             t = len(active_clusters)
-            
+
             # Probability for existing active clusters + new cluster
             log_probs = np.full(t + 1, -np.inf)
-            
+
             if t > 0:
                 diffs = X[i] - mu[active_clusters]
-                ll = const_term - 0.5 * np.sum((diffs ** 2) / state.sigma2, axis=1)
+                ll = const_term - 0.5 * np.sum((diffs**2) / state.sigma2, axis=1)
                 log_probs[:t] = np.log(n_k[active_clusters] + hp.alpha) + ll
-                
+
             # Probability for a new cluster (t+1)
             mu_new = None
             if t < K_max:
                 phi_new = rng.exponential(2.0, size=p)
                 lam_xi = np.where(state.xi == 1, hp.lambda_1, hp.lambda_0)
-                var = phi_new / (lam_xi ** 2)
+                var = phi_new / (lam_xi**2)
                 mu_new = rng.normal(0, np.sqrt(var))
-                
-                ll_new = const_term - 0.5 * np.sum(((X[i] - mu_new) ** 2) / state.sigma2)
-                log_ratio_V = log_V[t+1] - log_V[t]
+
+                ll_new = const_term - 0.5 * np.sum(
+                    ((X[i] - mu_new) ** 2) / state.sigma2
+                )
+                log_ratio_V = log_V[t + 1] - log_V[t]
                 log_probs[t] = np.log(hp.alpha) + log_ratio_V + ll_new
-                
+
             # Normalize and sample
             max_log = np.max(log_probs)
             probs = np.exp(log_probs - max_log)
             probs /= np.sum(probs)
-            
+
             choice = rng.choice(t + 1, p=probs)
-            
+
             if choice == t:
                 # Birth: find an empty slot in 0..K_max-1
                 empty_slots = np.where(n_k == 0)[0]
@@ -126,7 +130,7 @@ class GibbsSampler:
                 chosen_k = active_clusters[choice]
                 z[i] = chosen_k
                 n_k[chosen_k] += 1
-                
+
         # Update K_active
         K_active = int(np.sum(n_k > 0))
 
@@ -148,17 +152,17 @@ class GibbsSampler:
                 # Normal-scale-mixture formulation vectorized over features
                 mu_active = state.mu[active_idx, :]
                 tau2_active = state.tau2[active_idx, :]
-                sum_mu_tau2 = np.sum((mu_active ** 2) / tau2_active, axis=0)
+                sum_mu_tau2 = np.sum((mu_active**2) / tau2_active, axis=0)
 
                 log_slab = (
                     np.log(safe_theta)
                     + len(active_idx) * np.log(hp.lambda_1)
-                    - 0.5 * (hp.lambda_1 ** 2) * sum_mu_tau2
+                    - 0.5 * (hp.lambda_1**2) * sum_mu_tau2
                 )
                 log_spike = (
                     np.log(1.0 - safe_theta)
                     + len(active_idx) * np.log(hp.lambda_0)
-                    - 0.5 * (hp.lambda_0 ** 2) * sum_mu_tau2
+                    - 0.5 * (hp.lambda_0**2) * sum_mu_tau2
                 )
             else:
                 log_slab = np.full(p, np.log(safe_theta))
@@ -170,7 +174,9 @@ class GibbsSampler:
 
         # STEP 3c: Update theta ~ Beta(1 + s_active, beta_theta + p - s_active) (§7.5)
         s_active = int(np.sum(xi))
-        beta_theta = getattr(self, "beta_theta", p ** (1.0 + hp.kappa) / np.maximum(np.log(p), 1e-10))
+        beta_theta = getattr(
+            self, "beta_theta", p ** (1.0 + hp.kappa) / np.maximum(np.log(p), 1e-10)
+        )
         theta = rng.beta(1.0 + s_active, beta_theta + (p - s_active))
 
         # STEP 3b: Update feature-specific variances (sigma2)
