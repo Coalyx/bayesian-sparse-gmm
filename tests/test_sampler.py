@@ -196,4 +196,3 @@ def test_sampler_theta_updates():
 
     # It should not remain constant, so the number of unique thetas is > 1
     assert len(set(thetas)) > 1
-
