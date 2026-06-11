@@ -80,31 +80,36 @@ def test_numpy_sample_inverse_gaussian():
 
 def test_inverse_gaussian_per_cluster_lambda():
     """Verify that different clusters use different lambda values."""
-    from bayesian_sparse_gmm.backends._numba import NumbaBackend
     from bayesian_sparse_gmm.backends._numpy import NumpyBackend
 
-    # We test NumpyBackend, NumbaBackend (CPU), and NumbaBackend (CUDA, if available)
-    backends_to_test = [NumpyBackend(), NumbaBackend(use_cuda=False)]
+    backends_to_test = [NumpyBackend()]
 
-    # Check if Numba CUDA is actually working on this system (avoiding PTX version mismatch errors)
-    from numba import cuda as numba_cuda
+    try:
+        from bayesian_sparse_gmm.backends._numba import NumbaBackend
 
-    numba_cuda_working = False
-    if numba_cuda.is_available():
-        try:
+        backends_to_test.append(NumbaBackend(use_cuda=False))
 
-            @numba_cuda.jit
-            def dummy_kernel(x):
+        # Check if Numba CUDA is actually working on this system (avoiding PTX version mismatch errors)
+        from numba import cuda as numba_cuda
+
+        numba_cuda_working = False
+        if numba_cuda.is_available():
+            try:
+
+                @numba_cuda.jit
+                def dummy_kernel(x):
+                    pass
+
+                d_x = numba_cuda.to_device(np.zeros(1))
+                dummy_kernel[1, 1](d_x)
+                numba_cuda_working = True
+            except Exception:
                 pass
 
-            d_x = numba_cuda.to_device(np.zeros(1))
-            dummy_kernel[1, 1](d_x)
-            numba_cuda_working = True
-        except Exception:
-            pass
-
-    if numba_cuda_working:
-        backends_to_test.append(NumbaBackend(use_cuda=True))
+        if numba_cuda_working:
+            backends_to_test.append(NumbaBackend(use_cuda=True))
+    except ImportError:
+        pass
 
     for backend in backends_to_test:
         rng = np.random.default_rng(42)
