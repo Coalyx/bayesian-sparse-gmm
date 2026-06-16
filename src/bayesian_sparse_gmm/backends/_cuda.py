@@ -49,7 +49,7 @@ class CUDABackend(ComputeBackend):
 
         n_k = cp.bincount(z_gpu, minlength=K_max)
         sum_x = cp.zeros((K_max, X.shape[1]), dtype=X_gpu.dtype)
-        cp.scatter_add(sum_x, z_gpu, X_gpu)
+        cp.add.at(sum_x, z_gpu, X_gpu)
 
         return cp.asnumpy(n_k), cp.asnumpy(sum_x)
 
