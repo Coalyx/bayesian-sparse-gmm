@@ -190,7 +190,9 @@ class SVIOptimizer:
                 bar_x = global_sum_x[k] / global_N_k[k]
                 # Soft-thresholding to shrink means towards exactly 0
                 penalty = C_j / global_N_k[k]
-                expected_mu[k] = np.sign(bar_x) * np.maximum(0.0, np.abs(bar_x) - penalty)
+                expected_mu[k] = np.sign(bar_x) * np.maximum(
+                    0.0, np.abs(bar_x) - penalty
+                )
             else:
                 expected_mu[k] = state.expected_mu[k]
 
