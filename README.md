@@ -1,5 +1,10 @@
 # Bayesian Sparse GMM
 
+![Python](https://img.shields.io/badge/python-3.9%20--%203.12-blue?logo=python&style=flat-square)
+![CUDA](https://img.shields.io/badge/CUDA-Accelerated-76B900?logo=nvidia&style=flat-square)
+![CuPy](https://img.shields.io/badge/CuPy-Supported-7F22FE?style=flat-square)
+![Numba](https://img.shields.io/badge/Numba-Accelerated-FE7A15?style=flat-square)
+
 Bayesian Sparse Gaussian Mixture Model (GMM) implementation in Python.
 
 ## Installation
@@ -184,3 +189,7 @@ Understanding the key hyperparameters is crucial for fine-tuning the model's spa
   url     = {http://jmlr.org/papers/v26/23-0142.html}
 }
 ```
+
+## Contributors
+
+* **Nam Nam** ([@Neeze](https://github.com/Neeze)) - Developer of the SVI (Stochastic Variational Inference) optimizer, GPU/CUDA acceleration, and benchmarking suite.
