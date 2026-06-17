@@ -140,7 +140,13 @@ cython_debug/
 
 # Projects
 /visualize/
+#/benchmarks/visualize/
 # /tests/
 /docs/
 /.benchmarks/
-/benchmarks/visualize/
+
+# Cached dataset directories
+data/
+data_pipeline.py
+DATA_REPORT.md
+/github.com
