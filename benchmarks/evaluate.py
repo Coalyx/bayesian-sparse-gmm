@@ -51,10 +51,10 @@ def run_olivetti_benchmark(backend="numba"):
         n_iter=500,
         burn_in=200,
         thinning=2,
-        lambda_0=100.0,
-        lambda_1=1.0,
+        lambda_0=2.0,
+        lambda_1=0.5,
         alpha=1.0,
-        theta=0.5,
+        theta=0.01,
         a_sigma=1.0,
         b_sigma=1.0,
         backend=backend,
@@ -84,10 +84,10 @@ def run_olivetti_benchmark(backend="numba"):
         optimizer="svi",
         epochs=50,
         batch_size=128,
-        lambda_0=100.0,
-        lambda_1=1.0,
+        lambda_0=2.0,
+        lambda_1=0.5,
         alpha=1.0,
-        theta=0.5,
+        theta=0.01,
         a_sigma=1.0,
         b_sigma=1.0,
         backend=backend,
@@ -132,8 +132,10 @@ def run_olivetti_benchmark(backend="numba"):
 
     # --- Feature selection ---
     n_sel = len(gmm.selected_features_)
+    n_sel_svi = len(gmm_svi.selected_features_)
     p_total = X.shape[1]
-    print(f"Features kept: {n_sel}/{p_total} ({n_sel/p_total:.2%})")
+    print(f"Features kept (MCMC): {n_sel}/{p_total} ({n_sel/p_total:.2%})")
+    print(f"Features kept (SVI):  {n_sel_svi}/{p_total} ({n_sel_svi/p_total:.2%})")
 
     # --- Convergence ---
     trace = gmm.trace_
@@ -161,12 +163,12 @@ def run_olivetti_benchmark(backend="numba"):
     axes[1].set_title(f"SVI P(xi=1|X)")
     fig.colorbar(im1, ax=axes[1], fraction=0.046)
     
-    mask_img = (gmm.feature_probabilities_ > 0.5).reshape(64, 64).astype(float)
+    mask_img = (gmm_svi.feature_probabilities_ > 0.5).reshape(64, 64).astype(float)
     axes[2].imshow(mask_img, cmap="gray", interpolation="nearest")
-    axes[2].set_title(f"MCMC Selected Mask")
+    axes[2].set_title(f"SVI Selected Mask")
 
     axes[3].imshow(faces.images[0] * mask_img, cmap="gray", interpolation="nearest")
-    axes[3].set_title("Face x MCMC Mask Overlay")
+    axes[3].set_title("Face x SVI Mask Overlay")
 
     plt.tight_layout()
     plt.savefig("./visualize/olivetti_features.png", dpi=150)
@@ -292,6 +294,76 @@ def run_text_benchmark(backend="numba"):
     print(f"KMeans       ({km_time:.1f}s) - ARI: {ari_k:.4f} | AMI: {ami_k:.4f}")
     print(f"DBSCAN       ({db_time:.1f}s) - ARI: {ari_d:.4f} | AMI: {ami_d:.4f} | Clusters: {len(np.unique(dbscan.labels_))}")
 
+    # --- Visualization ---
+    X_2d = PCA(n_components=2, random_state=42).fit_transform(X_lsa)
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    fig.suptitle("20 Newsgroups Text Benchmark (PCA 2D Projection)", fontsize=14, fontweight="bold")
+    
+    pal = plt.cm.tab20(np.linspace(0, 1, 20))
+    
+    # Row 1, Col 1: Ground Truth
+    for k in np.unique(y):
+        m = y == k
+        axes[0, 0].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal[k % 20]], s=10, alpha=0.5)
+    axes[0, 0].set_title("Ground Truth (K=20)")
+    axes[0, 0].set_xlabel("PC1")
+    axes[0, 0].set_ylabel("PC2")
+    
+    # Row 1, Col 2: KMeans
+    unique_km = np.unique(kmeans.labels_)
+    for idx, k in enumerate(unique_km):
+        m = kmeans.labels_ == k
+        axes[0, 1].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal[idx % 20]], s=10, alpha=0.5)
+    axes[0, 1].set_title(f"KMeans (ARI={ari_k:.3f})")
+    axes[0, 1].set_xlabel("PC1")
+    axes[0, 1].set_ylabel("PC2")
+    
+    # Row 1, Col 3: DBSCAN
+    unique_db = np.unique(dbscan.labels_)
+    pal_db = plt.cm.tab20(np.linspace(0, 1, max(len(unique_db), 2)))
+    for idx, k in enumerate(unique_db):
+        m = dbscan.labels_ == k
+        c = 'k' if k == -1 else pal_db[idx % 20]
+        axes[0, 2].scatter(X_2d[m, 0], X_2d[m, 1], c=[c], s=10, alpha=0.5)
+    axes[0, 2].set_title(f"DBSCAN (ARI={ari_d:.3f}, K={len(unique_db)})")
+    axes[0, 2].set_xlabel("PC1")
+    axes[0, 2].set_ylabel("PC2")
+    
+    # Row 2, Col 1: BSGMM MCMC
+    unique_mcmc = np.unique(gmm.labels_)
+    pal_mcmc = plt.cm.tab20(np.linspace(0, 1, max(len(unique_mcmc), 2)))
+    for idx, k in enumerate(unique_mcmc):
+        m = gmm.labels_ == k
+        axes[1, 0].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal_mcmc[idx % 20]], s=10, alpha=0.5)
+    axes[1, 0].set_title(f"BSGMM MCMC (ARI={ari_b:.3f}, K={len(unique_mcmc)})")
+    axes[1, 0].set_xlabel("PC1")
+    axes[1, 0].set_ylabel("PC2")
+    
+    # Row 2, Col 2: BSGMM SVI
+    unique_svi = np.unique(gmm_svi.labels_)
+    pal_svi = plt.cm.tab20(np.linspace(0, 1, max(len(unique_svi), 2)))
+    for idx, k in enumerate(unique_svi):
+        m = gmm_svi.labels_ == k
+        axes[1, 1].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal_svi[idx % 20]], s=10, alpha=0.5)
+    axes[1, 1].set_title(f"BSGMM SVI (ARI={ari_s:.3f}, K={len(unique_svi)})")
+    axes[1, 1].set_xlabel("PC1")
+    axes[1, 1].set_ylabel("PC2")
+    
+    # Row 2, Col 3: SVI Feature Importance
+    p_total = X_lsa.shape[1]
+    bar_c = ["#e74c3c" if i in gmm_svi.selected_features_ else "#bdc3c7" for i in range(p_total)]
+    axes[1, 2].bar(range(p_total), gmm_svi.feature_probabilities_, color=bar_c, alpha=0.85)
+    axes[1, 2].axhline(0.5, color="k", ls="--", lw=1)
+    axes[1, 2].set_xlabel("Feature index")
+    axes[1, 2].set_ylabel("P(ξ=1|X)")
+    axes[1, 2].set_title(f"SVI Feature Importance ({n_sel_s}/{p_total} selected)")
+    
+    plt.tight_layout()
+    os.makedirs("./visualize", exist_ok=True)
+    plt.savefig("./visualize/text_clusters.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print("Saved './visualize/text_clusters.png'")
+
 
 def run_synthetic_sparse_benchmark(backend="numba"):
     """Synthetic data: 6 clusters in 60-dim space, only 10/60 features are informative."""
@@ -384,45 +456,68 @@ def run_synthetic_sparse_benchmark(backend="numba"):
 
     X_2d = PCA(n_components=2, random_state=42).fit_transform(X)
     pal = plt.cm.tab10(np.linspace(0, 0.9, 10))
-    fig, axes = plt.subplots(1, 4, figsize=(24, 5))
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
     fig.suptitle("Synthetic Sparse Signal Benchmark", fontsize=13, fontweight="bold")
 
+    # Row 1, Col 1: Ground Truth
     for k in range(K_true):
         m = y == k
-        axes[0].scatter(
+        axes[0, 0].scatter(
             X_2d[m, 0], X_2d[m, 1], c=[pal[k]], s=18, alpha=0.75, label=f"C{k}"
         )
-    axes[0].set_title(f"Ground Truth (K={K_true})")
-    axes[0].set_xlabel("PC1")
-    axes[0].set_ylabel("PC2")
-    axes[0].legend(fontsize=7, ncol=2)
+    axes[0, 0].set_title(f"Ground Truth (K={K_true})")
+    axes[0, 0].set_xlabel("PC1")
+    axes[0, 0].set_ylabel("PC2")
+    axes[0, 0].legend(fontsize=7, ncol=2)
 
+    # Row 1, Col 2: KMeans
+    unique_km = np.unique(km.labels_)
+    for idx, k in enumerate(unique_km):
+        m = km.labels_ == k
+        axes[0, 1].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal[idx % 10]], s=18, alpha=0.75)
+    axes[0, 1].set_title(f"KMeans (ARI={ari_k:.3f}, K={len(unique_km)})")
+    axes[0, 1].set_xlabel("PC1")
+    axes[0, 1].set_ylabel("PC2")
+
+    # Row 1, Col 3: DBSCAN
     unique_db = np.unique(dbscan.labels_)
     pal_db = plt.cm.tab20(np.linspace(0, 1, max(len(unique_db), 2)))
     for idx, k in enumerate(unique_db):
         m = dbscan.labels_ == k
         c = 'k' if k == -1 else pal_db[idx % 20]
-        axes[1].scatter(X_2d[m, 0], X_2d[m, 1], c=[c], s=18, alpha=0.75)
-    axes[1].set_title(f"DBSCAN (ARI={ari_d:.3f}, K={len(unique_db)})")
-    axes[1].set_xlabel("PC1")
-    axes[1].set_ylabel("PC2")
+        axes[0, 2].scatter(X_2d[m, 0], X_2d[m, 1], c=[c], s=18, alpha=0.75)
+    axes[0, 2].set_title(f"DBSCAN (ARI={ari_d:.3f}, K={len(unique_db)})")
+    axes[0, 2].set_xlabel("PC1")
+    axes[0, 2].set_ylabel("PC2")
 
-    for idx, k in enumerate(np.unique(gmm_svi.labels_)):
+    # Row 2, Col 1: BSGMM MCMC
+    unique_mcmc = np.unique(gmm.labels_)
+    for idx, k in enumerate(unique_mcmc):
+        m = gmm.labels_ == k
+        axes[1, 0].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal[idx % 10]], s=18, alpha=0.75)
+    axes[1, 0].set_title(f"BSGMM MCMC (ARI={ari_b:.3f}, K={len(unique_mcmc)})")
+    axes[1, 0].set_xlabel("PC1")
+    axes[1, 0].set_ylabel("PC2")
+
+    # Row 2, Col 2: BSGMM SVI
+    unique_svi = np.unique(gmm_svi.labels_)
+    for idx, k in enumerate(unique_svi):
         m = gmm_svi.labels_ == k
-        axes[2].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal[idx % 10]], s=18, alpha=0.75)
-    axes[2].set_title(f"BSGMM SVI (ARI={ari_s:.3f}, K={len(np.unique(gmm_svi.labels_))})")
-    axes[2].set_xlabel("PC1")
-    axes[2].set_ylabel("PC2")
+        axes[1, 1].scatter(X_2d[m, 0], X_2d[m, 1], c=[pal[idx % 10]], s=18, alpha=0.75)
+    axes[1, 1].set_title(f"BSGMM SVI (ARI={ari_s:.3f}, K={len(unique_svi)})")
+    axes[1, 1].set_xlabel("PC1")
+    axes[1, 1].set_ylabel("PC2")
 
+    # Row 2, Col 3: Feature Importance
     bar_c = ["#e74c3c" if i in true_sig else "#bdc3c7" for i in range(p_total)]
-    axes[3].bar(range(p_total), gmm_svi.feature_probabilities_, color=bar_c, alpha=0.85)
-    axes[3].axhline(0.5, color="k", ls="--", lw=1, label="threshold")
-    axes[3].set_xlabel("Feature index")
-    axes[3].set_ylabel("P(ξ=1|X)")
-    axes[3].set_title(
+    axes[1, 2].bar(range(p_total), gmm_svi.feature_probabilities_, color=bar_c, alpha=0.85)
+    axes[1, 2].axhline(0.5, color="k", ls="--", lw=1, label="threshold")
+    axes[1, 2].set_xlabel("Feature index")
+    axes[1, 2].set_ylabel("P(ξ=1|X)")
+    axes[1, 2].set_title(
         f"SVI Feature Importance (red=signal | P={prec_s:.0%}, R={rec_s:.0%})"
     )
-    axes[3].legend(fontsize=9)
+    axes[1, 2].legend(fontsize=9)
 
     plt.tight_layout()
     os.makedirs("./visualize", exist_ok=True)
@@ -502,11 +597,14 @@ def run_digits_benchmark(backend="numba"):
     X_2d = PCA(n_components=2, random_state=42).fit_transform(X)
     pal = plt.cm.tab10(np.linspace(0, 0.9, 10))
 
-    fig = plt.figure(figsize=(24, 9))
-    fig.suptitle("Sklearn Digits Benchmark", fontsize=13, fontweight="bold")
+    fig = plt.figure(figsize=(20, 14))
+    fig.suptitle("Sklearn Digits Benchmark", fontsize=14, fontweight="bold")
 
-    # Top-left: PCA scatter colored by true digit
-    ax1 = fig.add_subplot(2, 4, 1)
+    import matplotlib.gridspec as gridspec
+    gs = gridspec.GridSpec(3, 30, figure=fig)
+
+    # 1. Ground Truth Digits
+    ax1 = fig.add_subplot(gs[0, 0:10])
     for k in range(10):
         m = y == k
         ax1.scatter(X_2d[m, 0], X_2d[m, 1], c=[pal[k]], s=10, alpha=0.6, label=str(k))
@@ -515,8 +613,19 @@ def run_digits_benchmark(backend="numba"):
     ax1.set_ylabel("PC2")
     ax1.legend(fontsize=7, ncol=2, markerscale=1.5)
 
-    # Top-mid-left: DBSCAN
-    ax_db = fig.add_subplot(2, 4, 2)
+    # 2. KMeans
+    ax_km = fig.add_subplot(gs[0, 10:20])
+    unique_km = np.unique(km.labels_)
+    pal_km = plt.cm.tab10(np.linspace(0, 0.9, max(len(unique_km), 2)))
+    for idx, k in enumerate(unique_km):
+        m = km.labels_ == k
+        ax_km.scatter(X_2d[m, 0], X_2d[m, 1], c=[pal_km[idx % 10]], s=10, alpha=0.6)
+    ax_km.set_title(f"KMeans (ARI={ari_k:.3f}, K={len(unique_km)})")
+    ax_km.set_xlabel("PC1")
+    ax_km.set_ylabel("PC2")
+
+    # 3. DBSCAN
+    ax_db = fig.add_subplot(gs[0, 20:30])
     unique_db = np.unique(dbscan.labels_)
     pal_db = plt.cm.tab20(np.linspace(0, 1, max(len(unique_db), 2)))
     for idx, k in enumerate(unique_db):
@@ -527,29 +636,39 @@ def run_digits_benchmark(backend="numba"):
     ax_db.set_xlabel("PC1")
     ax_db.set_ylabel("PC2")
 
-    # Top-mid-right: PCA scatter colored by BSGMM clusters
-    ax2 = fig.add_subplot(2, 4, 3)
-    unique_labels = np.unique(gmm_svi.labels_)
-    n_pred = len(unique_labels)
-    pal2 = plt.cm.tab20(np.linspace(0, 1, max(n_pred, 2)))
-    for idx, k in enumerate(unique_labels):
-        m = gmm_svi.labels_ == k
-        ax2.scatter(X_2d[m, 0], X_2d[m, 1], c=[pal2[idx % 20]], s=10, alpha=0.6)
-    ax2.set_title(f"BSGMM SVI (ARI={ari_s:.3f}, K={n_pred})")
-    ax2.set_xlabel("PC1")
-    ax2.set_ylabel("PC2")
+    # 4. BSGMM MCMC
+    ax_mcmc = fig.add_subplot(gs[1, 0:10])
+    unique_mcmc = np.unique(gmm.labels_)
+    pal_mcmc = plt.cm.tab20(np.linspace(0, 1, max(len(unique_mcmc), 2)))
+    for idx, k in enumerate(unique_mcmc):
+        m = gmm.labels_ == k
+        ax_mcmc.scatter(X_2d[m, 0], X_2d[m, 1], c=[pal_mcmc[idx % 20]], s=10, alpha=0.6)
+    ax_mcmc.set_title(f"BSGMM MCMC (ARI={ari_b:.3f}, K={len(unique_mcmc)})")
+    ax_mcmc.set_xlabel("PC1")
+    ax_mcmc.set_ylabel("PC2")
 
-    # Top-right: Feature importance heatmap (8x8)
-    ax3 = fig.add_subplot(2, 4, 4)
+    # 5. BSGMM SVI
+    ax_svi = fig.add_subplot(gs[1, 10:20])
+    unique_svi = np.unique(gmm_svi.labels_)
+    pal_svi = plt.cm.tab20(np.linspace(0, 1, max(len(unique_svi), 2)))
+    for idx, k in enumerate(unique_svi):
+        m = gmm_svi.labels_ == k
+        ax_svi.scatter(X_2d[m, 0], X_2d[m, 1], c=[pal_svi[idx % 20]], s=10, alpha=0.6)
+    ax_svi.set_title(f"BSGMM SVI (ARI={ari_s:.3f}, K={len(unique_svi)})")
+    ax_svi.set_xlabel("PC1")
+    ax_svi.set_ylabel("PC2")
+
+    # 6. Feature importance heatmap (8x8)
+    ax_feat = fig.add_subplot(gs[1, 20:30])
     prob_img = gmm_svi.feature_probabilities_.reshape(8, 8)
-    im = ax3.imshow(prob_img, cmap="hot", vmin=0, vmax=1)
-    ax3.set_title(f"SVI P(γ=1|X) heatmap ({n_sel_s}/64 active)")
-    fig.colorbar(im, ax=ax3, fraction=0.046)
+    im = ax_feat.imshow(prob_img, cmap="hot", vmin=0, vmax=1)
+    ax_feat.set_title(f"SVI P(γ=1|X) heatmap ({n_sel_s}/64 active)")
+    fig.colorbar(im, ax=ax_feat, fraction=0.046)
 
     # Bottom: One representative sample image per predicted cluster (up to 10)
     unique_clusters = np.unique(gmm.labels_)[:10]
     for idx, k in enumerate(unique_clusters):
-        ax = fig.add_subplot(2, len(unique_clusters), len(unique_clusters) + idx + 1)
+        ax = fig.add_subplot(gs[2, idx * 3 : (idx + 1) * 3])
         sample_idx = np.where(gmm.labels_ == k)[0][0]
         ax.imshow(digits.images[sample_idx], cmap="gray_r", interpolation="nearest")
         ax.set_title(f"C{k}\n(true={y[sample_idx]})", fontsize=8)
@@ -634,65 +753,90 @@ def run_wine_benchmark(backend="numba"):
     X_2d = PCA(n_components=2, random_state=42).fit_transform(X)
     pal = plt.cm.Set1(np.linspace(0, 0.6, 3))
 
-    fig, axes = plt.subplots(1, 4, figsize=(24, 5))
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
     fig.suptitle("Wine Dataset Benchmark (3 cultivars)", fontsize=13, fontweight="bold")
 
-    # Panel 1: Ground truth PCA
+    # Row 1, Col 1: Ground Truth PCA
     for k in range(3):
         m = y == k
-        axes[0].scatter(
+        axes[0, 0].scatter(
             X_2d[m, 0], X_2d[m, 1], c=[pal[k]], s=40, alpha=0.8, label=f"Cultivar {k+1}"
         )
-    axes[0].set_title(f"Ground Truth (K=3)")
-    axes[0].set_xlabel("PC1")
-    axes[0].set_ylabel("PC2")
-    axes[0].legend()
+    axes[0, 0].set_title(f"Ground Truth (K=3)")
+    axes[0, 0].set_xlabel("PC1")
+    axes[0, 0].set_ylabel("PC2")
+    axes[0, 0].legend()
 
-    # Panel 2: DBSCAN
+    # Row 1, Col 2: KMeans
+    unique_km = np.unique(km.labels_)
+    pal_km = plt.cm.Set2(np.linspace(0, 0.7, max(len(unique_km), 2)))
+    for idx, k in enumerate(unique_km):
+        m = km.labels_ == k
+        axes[0, 1].scatter(
+            X_2d[m, 0], X_2d[m, 1], c=[pal_km[idx % len(pal_km)]], s=40, alpha=0.8, label=f"C{k}"
+        )
+    axes[0, 1].set_title(f"KMeans (ARI={ari_k:.3f}, K={len(unique_km)})")
+    axes[0, 1].set_xlabel("PC1")
+    axes[0, 1].set_ylabel("PC2")
+    axes[0, 1].legend()
+
+    # Row 1, Col 3: DBSCAN
     unique_db = np.unique(dbscan.labels_)
     pal_db = plt.cm.Set2(np.linspace(0, 0.7, max(len(unique_db), 2)))
     for idx, k in enumerate(unique_db):
         m = dbscan.labels_ == k
         c = 'k' if k == -1 else pal_db[idx % len(pal_db)]
-        axes[1].scatter(
+        axes[0, 2].scatter(
             X_2d[m, 0], X_2d[m, 1], c=[c], s=40, alpha=0.8, label=f"C{k}" if k != -1 else "Noise",
         )
-    axes[1].set_title(f"DBSCAN (ARI={ari_d:.3f}, K={len(unique_db)})")
-    axes[1].set_xlabel("PC1")
-    axes[1].set_ylabel("PC2")
-    axes[1].legend()
+    axes[0, 2].set_title(f"DBSCAN (ARI={ari_d:.3f}, K={len(unique_db)})")
+    axes[0, 2].set_xlabel("PC1")
+    axes[0, 2].set_ylabel("PC2")
+    axes[0, 2].legend()
 
-    # Panel 3: BSGMM (SVI) predicted
+    # Row 2, Col 1: BSGMM MCMC
+    unique_mcmc = np.unique(gmm.labels_)
+    pal_mcmc = plt.cm.Set2(np.linspace(0, 0.7, max(len(unique_mcmc), 2)))
+    for idx, k in enumerate(unique_mcmc):
+        m = gmm.labels_ == k
+        axes[1, 0].scatter(
+            X_2d[m, 0], X_2d[m, 1], c=[pal_mcmc[idx % len(pal_mcmc)]], s=40, alpha=0.8, label=f"C{k}"
+        )
+    axes[1, 0].set_title(f"BSGMM MCMC (ARI={ari_b:.3f}, K={len(unique_mcmc)})")
+    axes[1, 0].set_xlabel("PC1")
+    axes[1, 0].set_ylabel("PC2")
+    axes[1, 0].legend()
+
+    # Row 2, Col 2: BSGMM (SVI) predicted
     unique_labels_w = np.unique(gmm_svi.labels_)
     n_pred = len(unique_labels_w)
     pal2 = plt.cm.Set2(np.linspace(0, 0.7, max(n_pred, 2)))
     for idx, k in enumerate(unique_labels_w):
         m = gmm_svi.labels_ == k
-        axes[2].scatter(
+        axes[1, 1].scatter(
             X_2d[m, 0], X_2d[m, 1], c=[pal2[idx % len(pal2)]], s=40, alpha=0.8, label=f"C{k}",
         )
-    axes[2].set_title(f"BSGMM SVI (ARI={ari_s:.3f}, K={n_pred})")
-    axes[2].set_xlabel("PC1")
-    axes[2].set_ylabel("PC2")
-    axes[2].legend()
+    axes[1, 1].set_title(f"BSGMM SVI (ARI={ari_s:.3f}, K={n_pred})")
+    axes[1, 1].set_xlabel("PC1")
+    axes[1, 1].set_ylabel("PC2")
+    axes[1, 1].legend()
 
-    # Panel 4: Feature importance bar chart
+    # Row 2, Col 3: Feature importance bar chart
     sorted_idx = np.argsort(gmm_svi.feature_probabilities_)[::-1]
     bar_c = [
         "#e74c3c" if i in gmm_svi.selected_features_ else "#bdc3c7" for i in sorted_idx
     ]
-    axes[3].barh(
+    axes[1, 2].barh(
         range(len(feat_names)),
         gmm_svi.feature_probabilities_[sorted_idx],
         color=bar_c,
         alpha=0.85,
     )
-    axes[3].set_yticks(range(len(feat_names)))
-    axes[3].set_yticklabels([feat_names[i] for i in sorted_idx], fontsize=8)
-    axes[3].axvline(0.5, color="k", ls="--", lw=1)
-    axes[3].set_xlabel("P(ξ=1|X)")
-    axes[3].set_title(f"SVI Feature Importance ({n_sel_s}/13 selected)")
-
+    axes[1, 2].set_yticks(range(len(feat_names)))
+    axes[1, 2].set_yticklabels([feat_names[i] for i in sorted_idx], fontsize=8)
+    axes[1, 2].axvline(0.5, color="k", ls="--", lw=1)
+    axes[1, 2].set_xlabel("P(ξ=1|X)")
+    axes[1, 2].set_title(f"SVI Feature Importance ({n_sel_s}/13 selected)")
 
     plt.tight_layout()
     os.makedirs("./visualize", exist_ok=True)
