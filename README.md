@@ -1,5 +1,10 @@
 # Bayesian Sparse GMM
 
+![Python](https://img.shields.io/badge/python-3.9%20--%203.12-blue?logo=python&style=flat-square)
+![CUDA](https://img.shields.io/badge/CUDA-Accelerated-76B900?logo=nvidia&style=flat-square)
+![CuPy](https://img.shields.io/badge/CuPy-Supported-7F22FE?style=flat-square)
+![Numba](https://img.shields.io/badge/Numba-Accelerated-FE7A15?style=flat-square)
+
 Bayesian Sparse Gaussian Mixture Model (GMM) implementation in Python.
 
 ## Installation
@@ -52,6 +57,13 @@ print(f"Feature inclusion probabilities: {model.feature_probabilities_.round(3)}
 
 labels = model.predict(X)
 ```
+
+## Optimization Methods
+
+The model supports two optimization architectures via the `optimizer` parameter:
+
+1. **Gibbs Sampling (MCMC)** (`optimizer="default"`): The original, mathematically exact implementation. It explores the full posterior distribution but requires processing the entire dataset per iteration. Best for smaller datasets or when exact posterior distributions are required.
+2. **Stochastic Variational Inference (SVI)** (`optimizer="svi"`): A highly-scalable approach using Coordinate Ascent Variational Inference (CAVI) with Natural Gradients. It processes data in mini-batches, making it orders of magnitude faster and capable of scaling to extremely large datasets ($N \gg 10,000$).
 
 ## GPU / CUDA Acceleration
 
@@ -138,13 +150,28 @@ Understanding the key hyperparameters is crucial for fine-tuning the model's spa
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
+| `optimizer` | `str` | `"default"` | Choose `"default"` for exact MCMC (Gibbs Sampling) or `"svi"` for scalable Stochastic Variational Inference (mini-batch). |
 | `K_max` | `int` | `15` | The maximum possible number of clusters. The algorithm will automatically find the active number of clusters $K \le K_{max}$. Should be set safely higher than the expected number of true clusters. |
 | `lambda_0` | `float` | `1000.0` | **Spike rate** of the Spike-and-Slab LASSO prior. A larger value aggressively forces non-informative (noise) features closer to zero. Must satisfy `lambda_0 >> lambda_1`. |
 | `lambda_1` | `float` | `0.1` | **Slab rate**. A smaller value allows informative features to deviate freely from zero to capture the cluster structure. |
 | `alpha` | `float` | `1.0` | Dirichlet concentration parameter for the cluster weight prior. Controls the prior belief over the distribution of cluster sizes. |
 | `theta` | `float` | `0.1` | Prior probability of a feature being included in the active set (the slab component). Smaller values induce stronger sparsity (fewer features selected). |
+
+### MCMC Parameters (`optimizer="default"`)
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
 | `burn_in` | `int` | `500` | Number of initial MCMC iterations discarded to allow the Markov chain to converge to the stationary distribution. |
 | `n_iter` | `int` | `1000` | Total number of MCMC iterations. The number of samples used for posterior inference is `n_iter - burn_in`. |
+
+### SVI Parameters (`optimizer="svi"`)
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `epochs` | `int` | `100` | Total number of passes over the dataset during variational inference. |
+| `batch_size` | `int` | `256` | Mini-batch size for SVI updates. |
+| `delay_rho` | `float` | `1.0` | Learning rate delay parameter ($\tau_0$) to stabilize early iterations. |
+| `forgetting_rate`| `float`| `0.75` | Forgetting rate ($\kappa \in (0.5, 1.0]$) controlling the learning rate decay $\rho_t = (t + \tau_0)^{-\kappa}$. |
 
 *Tip: For extremely high-dimensional datasets with heavy noise, tuning `lambda_0` to be larger and `theta` to be smaller will encourage more aggressive feature selection.*
 
@@ -162,3 +189,7 @@ Understanding the key hyperparameters is crucial for fine-tuning the model's spa
   url     = {http://jmlr.org/papers/v26/23-0142.html}
 }
 ```
+
+## Contributors
+
+* **Nam Nam** ([@Neeze](https://github.com/Neeze)) - Developer of the SVI (Stochastic Variational Inference) optimizer, GPU/CUDA acceleration, and benchmarking suite.

@@ -40,6 +40,18 @@ class CUDABackend(ComputeBackend):
 
         return cp.asnumpy(log_w_gpu - 0.5 * dist)
 
+    def compute_expected_sufficient_stats(
+        self, X: np.ndarray, r_ik: np.ndarray, K_max: int
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Compute expected sufficient statistics on GPU."""
+        X_gpu = cp.asarray(X)
+        r_ik_gpu = cp.asarray(r_ik)
+
+        expected_n_k = cp.sum(r_ik_gpu, axis=0)
+        expected_sum_x = cp.dot(r_ik_gpu.T, X_gpu)
+
+        return cp.asnumpy(expected_n_k), cp.asnumpy(expected_sum_x)
+
     def compute_sufficient_stats(
         self, X: np.ndarray, z: np.ndarray, K_max: int
     ) -> tuple[np.ndarray, np.ndarray]:

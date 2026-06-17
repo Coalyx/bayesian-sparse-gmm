@@ -18,12 +18,27 @@ class HyperParams:
 
 
 @dataclass(frozen=True)
-class SamplerConfig:
-    """Configuration options for the Gibbs sampler."""
+class SVIConfig:
+    """Configuration options for Stochastic Variational Inference (SVI)."""
 
     K_max: int = 20  # Conservative cluster count upper bound
-    n_iter: int = 5000  # Total iterations (burn_in + post-burn_in)
-    burn_in: int = 1000  # Burn-in iterations to discard
+    epochs: int = 100  # Total passes over the dataset
+    batch_size: int = 256  # Mini-batch size
+    delay_rho: float = 1.0  # Learning rate delay parameter (tau_0)
+    forgetting_rate: float = 0.75  # Learning rate forgetting parameter (kappa)
+    backend: str = "auto"
+    n_jobs: int = -1
+    random_state: Optional[int] = None
+    verbose: int = 0
+
+
+@dataclass(frozen=True)
+class SamplerConfig:
+    """Configuration options for the Gibbs sampler (MCMC)."""
+
+    K_max: int = 20
+    n_iter: int = 5000
+    burn_in: int = 1000
     thinning: int = 1
     warm_up_iters: int = 50
     backend: str = "auto"
