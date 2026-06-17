@@ -43,6 +43,26 @@ def _compute_sufficient_stats_numba(X, z, K_max):
 
 
 @njit(parallel=True, fastmath=True, cache=True)
+def _compute_expected_sufficient_stats_numba(X, r_ik, K_max):
+    n, p = X.shape
+
+    n_k = np.zeros(K_max, dtype=X.dtype)
+    for i in prange(n):
+        for k in range(K_max):
+            n_k[k] += r_ik[i, k]
+
+    sum_x = np.zeros((K_max, p), dtype=X.dtype)
+    for j in prange(p):
+        for k in range(K_max):
+            s = 0.0
+            for i in range(n):
+                s += r_ik[i, k] * X[i, j]
+            sum_x[k, j] = s
+
+    return n_k, sum_x
+
+
+@njit(parallel=True, fastmath=True, cache=True)
 def _sample_cluster_means_numba(sum_x, n_k, tau2, sigma2, noise):
     K_max, p = sum_x.shape
     mu = np.empty((K_max, p), dtype=sum_x.dtype)
@@ -110,6 +130,20 @@ def _compute_sufficient_stats_cuda(X, z, n_k, sum_x):
         cuda.atomic.add(n_k, k, 1)
         for j in range(p):
             cuda.atomic.add(sum_x, (k, j), X[i, j])
+
+
+@cuda.jit
+def _compute_expected_sufficient_stats_cuda(X, r_ik, n_k, sum_x):
+    i = cuda.grid(1)
+    n = X.shape[0]
+    K_max = r_ik.shape[1]
+    p = X.shape[1]
+
+    if i < n:
+        for k in range(K_max):
+            cuda.atomic.add(n_k, k, r_ik[i, k])
+            for j in range(p):
+                cuda.atomic.add(sum_x, (k, j), r_ik[i, k] * X[i, j])
 
 
 @cuda.jit
@@ -215,6 +249,31 @@ class NumbaBackend(ComputeBackend):
             return out
         else:
             return _compute_cluster_log_probs_numba(X, mu, log_w, sigma2)
+
+    def compute_expected_sufficient_stats(
+        self, X: np.ndarray, r_ik: np.ndarray, K_max: int
+    ) -> tuple[np.ndarray, np.ndarray]:
+        if self.use_cuda:
+            n, p = X.shape
+            n_k = np.zeros(K_max, dtype=X.dtype)
+            sum_x = np.zeros((K_max, p), dtype=X.dtype)
+
+            d_X = cuda.to_device(X)
+            d_r_ik = cuda.to_device(r_ik)
+            d_n_k = cuda.to_device(n_k)
+            d_sum_x = cuda.to_device(sum_x)
+
+            threads_per_block = 256
+            blocks_per_grid = (n + threads_per_block - 1) // threads_per_block
+            _compute_expected_sufficient_stats_cuda[blocks_per_grid, threads_per_block](
+                d_X, d_r_ik, d_n_k, d_sum_x
+            )
+
+            d_n_k.copy_to_host(n_k)
+            d_sum_x.copy_to_host(sum_x)
+            return n_k, sum_x
+        else:
+            return _compute_expected_sufficient_stats_numba(X, r_ik, K_max)
 
     def compute_sufficient_stats(
         self, X: np.ndarray, z: np.ndarray, K_max: int

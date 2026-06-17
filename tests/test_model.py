@@ -57,6 +57,33 @@ def test_model_scikit_learn_api():
     assert isinstance(score, float)
 
 
+def test_model_svi_optimizer():
+    """Test that the SVI optimizer runs without crashing and learns basic structure."""
+    np.random.seed(42)
+    # Generate simple synthetic data: 2 clusters, 5 informative features, 15 noise
+    n, p = 100, 20
+    X = np.random.randn(n, p)
+    X[:50, :5] += 5.0  # Cluster 1
+    X[50:, :5] -= 5.0  # Cluster 2
+
+    gmm = BayesianSparseGMM(
+        K_max=5,
+        optimizer="svi",
+        epochs=10,
+        batch_size=32,
+        use_identity_covariance=True,
+        random_state=42,
+    )
+    gmm.fit(X)
+
+    assert gmm.K_hat_ > 0, "SVI should find at least 1 active cluster."
+    assert hasattr(gmm, "state_"), "VariationalState should be saved."
+    assert gmm.labels_.shape == (n,)
+    assert gmm.selected_features_.size > 0, "Should select informative features."
+    assert gmm.w_.shape == (5,)
+    assert gmm.means_.shape == (5, p)
+
+
 def test_model_custom_theta():
     X = np.random.normal(size=(20, 3))
     # Test setting custom theta
