@@ -7,15 +7,19 @@ edge cases, and dtype handling.
 
 Requires: CuPy + CUDA GPU. Tests are automatically skipped on CPU-only machines.
 """
+
 import os
 import sys
+
 import numpy as np
 import pytest
 from sklearn.cluster import KMeans as SklearnKMeans
 from sklearn.datasets import make_blobs
 from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
 
-cp = pytest.importorskip("cupy", reason="CuPy not installed — skipping KMeans CUDA tests")
+cp = pytest.importorskip(
+    "cupy", reason="CuPy not installed — skipping KMeans CUDA tests"
+)
 
 from bayesian_sparse_gmm.clustering.kmeans import KMeansCupy
 
@@ -53,12 +57,12 @@ class TestBasicClusteringQuality:
 
     def test_matches_sklearn(self):
         """CuPy should match sklearn when using equivalent config."""
-        X, _ = make_blobs(
-            n_samples=2000, centers=4, cluster_std=1.0, random_state=SEED
-        )
+        X, _ = make_blobs(n_samples=2000, centers=4, cluster_std=1.0, random_state=SEED)
         X = X.astype(np.float32)
 
-        sk = SklearnKMeans(n_clusters=4, init="k-means++", n_init=1, max_iter=300, random_state=SEED)
+        sk = SklearnKMeans(
+            n_clusters=4, init="k-means++", n_init=1, max_iter=300, random_state=SEED
+        )
         sk.fit(X)
 
         cupy_km = KMeansCupy(n_clusters=4, max_iter=300, random_state=SEED)
@@ -69,19 +73,22 @@ class TestBasicClusteringQuality:
 
     def test_inertia_comparable_to_sklearn(self):
         """CuPy inertia should be within reasonable range of sklearn."""
-        X, _ = make_blobs(
-            n_samples=2000, centers=4, cluster_std=1.0, random_state=SEED
-        )
+        X, _ = make_blobs(n_samples=2000, centers=4, cluster_std=1.0, random_state=SEED)
         X = X.astype(np.float32)
 
-        sk = SklearnKMeans(n_clusters=4, init="k-means++", n_init=1, max_iter=300, random_state=SEED)
+        sk = SklearnKMeans(
+            n_clusters=4, init="k-means++", n_init=1, max_iter=300, random_state=SEED
+        )
         sk.fit(X)
 
         cupy_km = KMeansCupy(n_clusters=4, max_iter=300, random_state=SEED)
         cupy_km.fit(X)
 
         def compute_inertia(X, labels, centers):
-            return sum(np.dot(X[i] - centers[labels[i]], X[i] - centers[labels[i]]) for i in range(len(X)))
+            return sum(
+                np.dot(X[i] - centers[labels[i]], X[i] - centers[labels[i]])
+                for i in range(len(X))
+            )
 
         sk_inertia = compute_inertia(X, sk.labels_, sk.cluster_centers_)
         cupy_inertia = compute_inertia(X, cupy_km.labels_, cupy_km.cluster_centers_)
@@ -118,20 +125,25 @@ class TestConvergenceAndStability:
         km2.fit(X)
 
         assert np.array_equal(km1.labels_, km2.labels_), "Labels differ with same seed"
-        np.testing.assert_allclose(km1.cluster_centers_, km2.cluster_centers_, atol=1e-5)
+        np.testing.assert_allclose(
+            km1.cluster_centers_, km2.cluster_centers_, atol=1e-5
+        )
 
     def test_atomicadd_accuracy(self):
         """atomicAdd accumulation should produce accurate center estimates."""
         rng = np.random.RandomState(SEED)
         centers_true = np.array([[0, 0], [10, 10], [20, 20]], dtype=np.float32)
 
-        X_parts = [rng.randn(1000, 2).astype(np.float32) * 0.01 + c for c in centers_true]
+        X_parts = [
+            rng.randn(1000, 2).astype(np.float32) * 0.01 + c for c in centers_true
+        ]
         X = np.vstack(X_parts)
 
         km = KMeansCupy(n_clusters=3, max_iter=300, random_state=SEED)
         km.fit(X)
 
         from scipy.spatial.distance import cdist
+
         dists = cdist(km.cluster_centers_, centers_true)
         max_err = 0.0
         for _ in range(3):
@@ -148,7 +160,9 @@ class TestDtypeHandling:
 
     def test_float64_clustering(self):
         """Float64 input should work correctly."""
-        X, true_labels = make_blobs(n_samples=1000, centers=3, cluster_std=1.0, random_state=SEED)
+        X, true_labels = make_blobs(
+            n_samples=1000, centers=3, cluster_std=1.0, random_state=SEED
+        )
         X = X.astype(np.float64)
 
         km = KMeansCupy(n_clusters=3, max_iter=300, random_state=SEED)
@@ -199,7 +213,9 @@ class TestEdgeCases:
         """Two well-separated clusters should be perfectly identified."""
         rng = np.random.RandomState(SEED)
         c1 = rng.randn(500, 2).astype(np.float32) + np.array([10, 10], dtype=np.float32)
-        c2 = rng.randn(500, 2).astype(np.float32) + np.array([-10, -10], dtype=np.float32)
+        c2 = rng.randn(500, 2).astype(np.float32) + np.array(
+            [-10, -10], dtype=np.float32
+        )
         X = np.vstack([c1, c2])
         true_labels = np.array([0] * 500 + [1] * 500)
 
@@ -223,8 +239,12 @@ class TestEdgeCases:
     def test_empty_cluster_handling(self):
         """More clusters than natural groups should not crash or produce NaN."""
         rng = np.random.RandomState(SEED)
-        c1 = rng.randn(500, 2).astype(np.float32) * 0.1 + np.array([5, 5], dtype=np.float32)
-        c2 = rng.randn(500, 2).astype(np.float32) * 0.1 + np.array([-5, -5], dtype=np.float32)
+        c1 = rng.randn(500, 2).astype(np.float32) * 0.1 + np.array(
+            [5, 5], dtype=np.float32
+        )
+        c2 = rng.randn(500, 2).astype(np.float32) * 0.1 + np.array(
+            [-5, -5], dtype=np.float32
+        )
         X = np.vstack([c1, c2])
 
         km = KMeansCupy(n_clusters=5, max_iter=300, random_state=SEED)
@@ -240,7 +260,11 @@ class TestHighDimensional:
     def test_d200(self):
         """d=200 should cluster correctly."""
         X, true_labels = make_blobs(
-            n_samples=5000, centers=10, n_features=200, cluster_std=3.0, random_state=SEED
+            n_samples=5000,
+            centers=10,
+            n_features=200,
+            cluster_std=3.0,
+            random_state=SEED,
         )
         X = X.astype(np.float32)
 
@@ -254,7 +278,11 @@ class TestHighDimensional:
     def test_d500(self):
         """d=500 should cluster correctly with no NaN/Inf."""
         X, true_labels = make_blobs(
-            n_samples=2000, centers=5, n_features=500, cluster_std=5.0, random_state=SEED
+            n_samples=2000,
+            centers=5,
+            n_features=500,
+            cluster_std=5.0,
+            random_state=SEED,
         )
         X = X.astype(np.float32)
 
@@ -282,9 +310,9 @@ class TestNInit:
         km10 = KMeansCupy(n_clusters=5, n_init=10, max_iter=300, random_state=SEED)
         km10.fit(X)
 
-        assert km10.inertia_ <= km1.inertia_ + 1e-6, (
-            f"n_init=10 inertia ({km10.inertia_:.1f}) > n_init=1 ({km1.inertia_:.1f})"
-        )
+        assert (
+            km10.inertia_ <= km1.inertia_ + 1e-6
+        ), f"n_init=10 inertia ({km10.inertia_:.1f}) > n_init=1 ({km1.inertia_:.1f})"
         assert km10.inertia_ is not None and km10.inertia_ > 0
 
     def test_n_init_backward_compat(self):
@@ -299,7 +327,9 @@ class TestNInit:
         km_default.fit(X)
 
         assert np.array_equal(km_explicit.labels_, km_default.labels_)
-        np.testing.assert_allclose(km_explicit.cluster_centers_, km_default.cluster_centers_, atol=1e-5)
+        np.testing.assert_allclose(
+            km_explicit.cluster_centers_, km_default.cluster_centers_, atol=1e-5
+        )
 
     def test_n_init_reproducibility(self):
         """n_init > 1 with same seed should produce near-identical results."""
@@ -314,9 +344,9 @@ class TestNInit:
 
         # atomicAdd float32 is non-deterministic in accumulation order,
         # so check ARI and inertia rather than exact equality
-        assert abs(km1.inertia_ - km2.inertia_) < 1.0, (
-            f"Inertia diff={abs(km1.inertia_ - km2.inertia_):.6f}"
-        )
+        assert (
+            abs(km1.inertia_ - km2.inertia_) < 1.0
+        ), f"Inertia diff={abs(km1.inertia_ - km2.inertia_):.6f}"
         ari = adjusted_rand_score(km1.labels_, km2.labels_)
         assert ari >= 0.99, f"ARI between runs={ari:.4f}"
 
@@ -342,7 +372,11 @@ class TestSharedMemoryKernel:
         """Large centers should fall back to global memory without crash."""
         # 100 * 500 * 4 = 200KB > 48KB — forces global memory path
         X, _ = make_blobs(
-            n_samples=5000, centers=20, n_features=500, cluster_std=5.0, random_state=SEED
+            n_samples=5000,
+            centers=20,
+            n_features=500,
+            cluster_std=5.0,
+            random_state=SEED,
         )
         X = X.astype(np.float32)
 

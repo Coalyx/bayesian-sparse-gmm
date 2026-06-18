@@ -1,8 +1,10 @@
 import os
+
 import numpy as np
 
 try:
     import cupy as cp
+
     CUPY_AVAILABLE = True
 except ImportError:
     CUPY_AVAILABLE = False
@@ -22,7 +24,9 @@ class KMeansCupy:
     # Conservative shared memory limit (48KB, guaranteed on CC 2.0+)
     _DEFAULT_MAX_SHMEM = 48 * 1024
 
-    def __init__(self, n_clusters=8, n_init=1, max_iter=300, tol=1e-4, random_state=None):
+    def __init__(
+        self, n_clusters=8, n_init=1, max_iter=300, tol=1e-4, random_state=None
+    ):
         """Initialize the KMeans parameters.
 
         Args:
@@ -54,22 +58,34 @@ class KMeansCupy:
         self.module = cp.RawModule(code=cuda_source)
 
         # KMeans++ distance update kernels
-        self.kernel_update_dist_f32 = self.module.get_function("update_distances_float32")
-        self.kernel_update_dist_f64 = self.module.get_function("update_distances_float64")
+        self.kernel_update_dist_f32 = self.module.get_function(
+            "update_distances_float32"
+        )
+        self.kernel_update_dist_f64 = self.module.get_function(
+            "update_distances_float64"
+        )
 
         # Lloyd assign + accumulate kernels (global memory)
-        self.kernel_assign_f32 = self.module.get_function("assign_and_accumulate_float32")
-        self.kernel_assign_f64 = self.module.get_function("assign_and_accumulate_float64")
+        self.kernel_assign_f32 = self.module.get_function(
+            "assign_and_accumulate_float32"
+        )
+        self.kernel_assign_f64 = self.module.get_function(
+            "assign_and_accumulate_float64"
+        )
 
         # Lloyd assign + accumulate kernels (shared memory for centers)
-        self.kernel_assign_shmem_f32 = self.module.get_function("assign_accumulate_shmem_float32")
-        self.kernel_assign_shmem_f64 = self.module.get_function("assign_accumulate_shmem_float64")
+        self.kernel_assign_shmem_f32 = self.module.get_function(
+            "assign_accumulate_shmem_float32"
+        )
+        self.kernel_assign_shmem_f64 = self.module.get_function(
+            "assign_accumulate_shmem_float64"
+        )
 
     def _get_max_shared_mem(self):
         """Query maximum shared memory per block for the current device."""
         try:
             props = cp.cuda.runtime.getDeviceProperties(cp.cuda.Device().id)
-            return props.get('sharedMemPerBlock', self._DEFAULT_MAX_SHMEM)
+            return props.get("sharedMemPerBlock", self._DEFAULT_MAX_SHMEM)
         except Exception:
             return self._DEFAULT_MAX_SHMEM
 
@@ -101,8 +117,9 @@ class KMeansCupy:
         for c in range(1, self.n_clusters):
             # Update min_dist_sq with the newest center
             update_kernel(
-                (grid_size,), (block_size,),
-                (X, centers[c - 1], min_dist_sq, n_samples, n_features)
+                (grid_size,),
+                (block_size,),
+                (X, centers[c - 1], min_dist_sq, n_samples, n_features),
             )
 
             # Choose the next center
@@ -144,9 +161,17 @@ class KMeansCupy:
         use_shmem = shmem_required <= max_shmem
 
         if use_shmem:
-            assign_kernel = self.kernel_assign_shmem_f32 if dtype == cp.float32 else self.kernel_assign_shmem_f64
+            assign_kernel = (
+                self.kernel_assign_shmem_f32
+                if dtype == cp.float32
+                else self.kernel_assign_shmem_f64
+            )
         else:
-            assign_kernel = self.kernel_assign_f32 if dtype == cp.float32 else self.kernel_assign_f64
+            assign_kernel = (
+                self.kernel_assign_f32
+                if dtype == cp.float32
+                else self.kernel_assign_f64
+            )
 
         block_size = 256
         grid_size = (n_samples + block_size - 1) // block_size
@@ -158,16 +183,34 @@ class KMeansCupy:
             # E-step & M-step (accumulation) combined in single kernel
             if use_shmem:
                 assign_kernel(
-                    (grid_size,), (block_size,),
-                    (X_cp, centers, labels, new_centers_sum, new_centers_count,
-                     n_samples, n_features, self.n_clusters),
-                    shared_mem=shmem_required
+                    (grid_size,),
+                    (block_size,),
+                    (
+                        X_cp,
+                        centers,
+                        labels,
+                        new_centers_sum,
+                        new_centers_count,
+                        n_samples,
+                        n_features,
+                        self.n_clusters,
+                    ),
+                    shared_mem=shmem_required,
                 )
             else:
                 assign_kernel(
-                    (grid_size,), (block_size,),
-                    (X_cp, centers, labels, new_centers_sum, new_centers_count,
-                     n_samples, n_features, self.n_clusters)
+                    (grid_size,),
+                    (block_size,),
+                    (
+                        X_cp,
+                        centers,
+                        labels,
+                        new_centers_sum,
+                        new_centers_count,
+                        n_samples,
+                        n_features,
+                        self.n_clusters,
+                    ),
                 )
 
             # M-step (averaging)
