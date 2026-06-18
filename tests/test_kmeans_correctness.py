@@ -8,20 +8,17 @@ edge cases, and dtype handling.
 Requires: CuPy + CUDA GPU. Tests are automatically skipped on CPU-only machines.
 """
 
-import os
-import sys
-
 import numpy as np
 import pytest
 from sklearn.cluster import KMeans as SklearnKMeans
 from sklearn.datasets import make_blobs
 from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
 
+from bayesian_sparse_gmm.clustering.kmeans import KMeansCupy
+
 cp = pytest.importorskip(
     "cupy", reason="CuPy not installed — skipping KMeans CUDA tests"
 )
-
-from bayesian_sparse_gmm.clustering.kmeans import KMeansCupy
 
 SEED = 42
 
