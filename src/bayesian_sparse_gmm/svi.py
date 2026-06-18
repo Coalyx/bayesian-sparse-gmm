@@ -40,18 +40,28 @@ class SVIOptimizer:
         self.beta_theta = (p ** (1 + hp.kappa)) / np.maximum(np.log(p), 1e-10)
 
         try:
-            from sklearn.cluster import KMeans
+            from .clustering.kmeans import KMeansCupy
 
-            kmeans = KMeans(
+            kmeans = KMeansCupy(
                 n_clusters=K_max,
-                init="k-means++",
-                n_init=1,
                 random_state=rng.integers(0, 2**31 - 1),
             )
             kmeans.fit(X)
             expected_mu = kmeans.cluster_centers_.copy()
-        except Exception:
-            expected_mu = rng.normal(size=(K_max, p))
+        except ImportError:
+            try:
+                from sklearn.cluster import KMeans
+
+                kmeans = KMeans(
+                    n_clusters=K_max,
+                    init="k-means++",
+                    n_init=1,
+                    random_state=rng.integers(0, 2**31 - 1),
+                )
+                kmeans.fit(X)
+                expected_mu = kmeans.cluster_centers_.copy()
+            except Exception:
+                expected_mu = rng.normal(size=(K_max, p))
 
         global_N_k = np.ones(K_max) * (n / K_max)
         global_sum_x = expected_mu * global_N_k[:, np.newaxis]
