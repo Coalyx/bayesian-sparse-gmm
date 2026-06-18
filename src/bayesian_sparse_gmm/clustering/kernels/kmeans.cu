@@ -136,7 +136,8 @@ __global__ void assign_accumulate_shmem_float32(
     int n_features,
     int n_clusters)
 {
-    extern __shared__ float s_centers[];
+    extern __shared__ unsigned char s_mem[];
+    float* s_centers = (float*)s_mem;
 
     // Cooperative loading: all threads in block load centers into shared memory
     int total_elements = n_clusters * n_features;
@@ -182,7 +183,8 @@ __global__ void assign_accumulate_shmem_float64(
     int n_features,
     int n_clusters)
 {
-    extern __shared__ double s_centers_d[];
+    extern __shared__ unsigned char s_mem[];
+    double* s_centers_d = (double*)s_mem;
 
     int total_elements = n_clusters * n_features;
     for (int idx = threadIdx.x; idx < total_elements; idx += blockDim.x) {
