@@ -147,6 +147,7 @@ cython_debug/
 
 # Cached dataset directories
 data/
-data_pipeline.py
-DATA_REPORT.md
 /github.com
+/benchmarks/visualize
+/benchmarks/results
+BENCHMARK_REPORT.md
