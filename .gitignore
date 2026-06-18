@@ -140,7 +140,14 @@ cython_debug/
 
 # Projects
 /visualize/
+#/benchmarks/visualize/
 # /tests/
 /docs/
 /.benchmarks/
-/benchmarks/visualize/
+
+# Cached dataset directories
+data/
+/github.com
+/benchmarks/visualize
+/benchmarks/results
+BENCHMARK_REPORT.md
