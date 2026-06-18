@@ -49,4 +49,5 @@ profile = "black"
 [tool.black]
 target-version = ["py39"]
 
-
+[tool.pytest.ini_options]
+testpaths = ["tests"]

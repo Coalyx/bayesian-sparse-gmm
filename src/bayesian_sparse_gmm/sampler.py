@@ -28,21 +28,32 @@ class GibbsSampler:
         )
 
         try:
-            from sklearn.cluster import KMeans
+            from .clustering.kmeans import KMeansCupy
 
-            kmeans = KMeans(
+            kmeans = KMeansCupy(
                 n_clusters=K_max,
-                init="k-means++",
-                n_init=1,
                 random_state=rng.integers(0, 2**31 - 1),
             )
             kmeans.fit(X)
             z = kmeans.labels_
             mu = kmeans.cluster_centers_.copy()
 
-        except Exception:
-            z = rng.choice(K_max, size=n)
-            mu = rng.normal(size=(K_max, p))
+        except ImportError:
+            try:
+                from sklearn.cluster import KMeans
+
+                kmeans = KMeans(
+                    n_clusters=K_max,
+                    init="k-means++",
+                    n_init=1,
+                    random_state=rng.integers(0, 2**31 - 1),
+                )
+                kmeans.fit(X)
+                z = kmeans.labels_
+                mu = kmeans.cluster_centers_.copy()
+            except Exception:
+                z = rng.choice(K_max, size=n)
+                mu = rng.normal(size=(K_max, p))
 
         w = np.ones(K_max) / K_max
         xi = np.zeros(p, dtype=np.int32)
