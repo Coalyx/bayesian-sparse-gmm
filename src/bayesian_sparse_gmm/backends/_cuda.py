@@ -28,15 +28,15 @@ class CUDABackend(ComputeBackend):
             free_mem, _ = cp.cuda.Device().mem_info
             # Use 50% of available free memory for safety
             usable_mem = free_mem * 0.5
-            
+
             bytes_per_element = np.dtype(dtype).itemsize
             # Max elements per sample across operations is roughly D + 2*K + 5
             elements_per_sample = num_features + 2 * num_clusters + 5
             bytes_per_sample = elements_per_sample * bytes_per_element
-            
+
             if bytes_per_sample == 0:
                 return 16384
-                
+
             chunk_size = int(usable_mem / bytes_per_sample)
             return max(1024, min(chunk_size, 1024 * 1024))
         except Exception:
@@ -103,14 +103,14 @@ class CUDABackend(ComputeBackend):
         else:
             expected_n_k = cp.zeros(K_max, dtype=r_ik.dtype)
             expected_sum_x = cp.zeros((K_max, X.shape[1]), dtype=X.dtype)
-            
+
             for i in range(0, n_samples, CHUNK_SIZE):
                 X_chunk = cp.asarray(X[i : i + CHUNK_SIZE])
                 r_ik_chunk = cp.asarray(r_ik[i : i + CHUNK_SIZE])
-                
+
                 expected_n_k += cp.sum(r_ik_chunk, axis=0)
                 expected_sum_x += cp.dot(r_ik_chunk.T, X_chunk)
-                
+
             return cp.asnumpy(expected_n_k), cp.asnumpy(expected_sum_x)
 
     def compute_sufficient_stats(
@@ -132,14 +132,14 @@ class CUDABackend(ComputeBackend):
         else:
             n_k = cp.zeros(K_max, dtype=cp.int64)
             sum_x = cp.zeros((K_max, X.shape[1]), dtype=X.dtype)
-            
+
             for i in range(0, n_samples, CHUNK_SIZE):
                 X_chunk = cp.asarray(X[i : i + CHUNK_SIZE])
                 z_chunk = cp.asarray(z[i : i + CHUNK_SIZE])
-                
+
                 n_k += cp.bincount(z_chunk, minlength=K_max)
                 cp.add.at(sum_x, z_chunk, X_chunk)
-                
+
             return cp.asnumpy(n_k), cp.asnumpy(sum_x)
 
     def sample_cluster_means(
