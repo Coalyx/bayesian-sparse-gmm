@@ -20,50 +20,127 @@ class CUDABackend(ComputeBackend):
                 "CuPy is not installed. Install with: pip install cupy-cuda12x"
             )
 
+    def _get_optimal_chunk_size(
+        self, num_features: int, num_clusters: int, dtype
+    ) -> int:
+        """Dynamically compute optimal chunk size based on available VRAM."""
+        try:
+            free_mem, _ = cp.cuda.Device().mem_info
+            # Use 50% of available free memory for safety
+            usable_mem = free_mem * 0.5
+            
+            bytes_per_element = np.dtype(dtype).itemsize
+            # Max elements per sample across operations is roughly D + 2*K + 5
+            elements_per_sample = num_features + 2 * num_clusters + 5
+            bytes_per_sample = elements_per_sample * bytes_per_element
+            
+            if bytes_per_sample == 0:
+                return 16384
+                
+            chunk_size = int(usable_mem / bytes_per_sample)
+            return max(1024, min(chunk_size, 1024 * 1024))
+        except Exception:
+            return 16384
+
     def compute_cluster_log_probs(
         self, X: np.ndarray, mu: np.ndarray, log_w: np.ndarray, sigma2: np.ndarray
     ) -> np.ndarray:
         """Compute diagonal-Mahalanobis log-probabilities on GPU."""
-        X_gpu = cp.asarray(X)
-        mu_gpu = cp.asarray(mu)
-        log_w_gpu = cp.asarray(log_w)
-        sigma2_gpu = cp.asarray(sigma2)
+        CHUNK_SIZE = self._get_optimal_chunk_size(X.shape[1], mu.shape[0], X.dtype)
+        n_samples = X.shape[0]
 
-        std = cp.sqrt(sigma2_gpu)
-        X_scaled = X_gpu / std
-        mu_scaled = mu_gpu / std
+        if n_samples <= CHUNK_SIZE:
+            X_gpu = cp.asarray(X)
+            mu_gpu = cp.asarray(mu)
+            log_w_gpu = cp.asarray(log_w)
+            sigma2_gpu = cp.asarray(sigma2)
 
-        x_sq = cp.sum(X_scaled**2, axis=1, keepdims=True)
-        mu_sq = cp.sum(mu_scaled**2, axis=1, keepdims=True).T
-        dist = x_sq - 2.0 * cp.dot(X_scaled, mu_scaled.T) + mu_sq
-        dist = cp.maximum(dist, 0.0)
+            std = cp.sqrt(sigma2_gpu)
+            X_scaled = X_gpu / std
+            mu_scaled = mu_gpu / std
 
-        return cp.asnumpy(log_w_gpu - 0.5 * dist)
+            x_sq = cp.sum(X_scaled**2, axis=1, keepdims=True)
+            mu_sq = cp.sum(mu_scaled**2, axis=1, keepdims=True).T
+            dist = x_sq - 2.0 * cp.dot(X_scaled, mu_scaled.T) + mu_sq
+            dist = cp.maximum(dist, 0.0)
+
+            return cp.asnumpy(log_w_gpu - 0.5 * dist)
+        else:
+            mu_gpu = cp.asarray(mu)
+            log_w_gpu = cp.asarray(log_w)
+            sigma2_gpu = cp.asarray(sigma2)
+            std = cp.sqrt(sigma2_gpu)
+            mu_scaled = mu_gpu / std
+            mu_sq = cp.sum(mu_scaled**2, axis=1, keepdims=True).T
+
+            result = np.empty((n_samples, mu.shape[0]), dtype=X.dtype)
+
+            for i in range(0, n_samples, CHUNK_SIZE):
+                X_chunk = cp.asarray(X[i : i + CHUNK_SIZE])
+                X_scaled = X_chunk / std
+                x_sq = cp.sum(X_scaled**2, axis=1, keepdims=True)
+                dist = x_sq - 2.0 * cp.dot(X_scaled, mu_scaled.T) + mu_sq
+                dist = cp.maximum(dist, 0.0)
+                result[i : i + CHUNK_SIZE] = cp.asnumpy(log_w_gpu - 0.5 * dist)
+
+            return result
 
     def compute_expected_sufficient_stats(
         self, X: np.ndarray, r_ik: np.ndarray, K_max: int
     ) -> tuple[np.ndarray, np.ndarray]:
         """Compute expected sufficient statistics on GPU."""
-        X_gpu = cp.asarray(X)
-        r_ik_gpu = cp.asarray(r_ik)
+        CHUNK_SIZE = self._get_optimal_chunk_size(X.shape[1], K_max, X.dtype)
+        n_samples = X.shape[0]
 
-        expected_n_k = cp.sum(r_ik_gpu, axis=0)
-        expected_sum_x = cp.dot(r_ik_gpu.T, X_gpu)
+        if n_samples <= CHUNK_SIZE:
+            X_gpu = cp.asarray(X)
+            r_ik_gpu = cp.asarray(r_ik)
 
-        return cp.asnumpy(expected_n_k), cp.asnumpy(expected_sum_x)
+            expected_n_k = cp.sum(r_ik_gpu, axis=0)
+            expected_sum_x = cp.dot(r_ik_gpu.T, X_gpu)
+
+            return cp.asnumpy(expected_n_k), cp.asnumpy(expected_sum_x)
+        else:
+            expected_n_k = cp.zeros(K_max, dtype=r_ik.dtype)
+            expected_sum_x = cp.zeros((K_max, X.shape[1]), dtype=X.dtype)
+            
+            for i in range(0, n_samples, CHUNK_SIZE):
+                X_chunk = cp.asarray(X[i : i + CHUNK_SIZE])
+                r_ik_chunk = cp.asarray(r_ik[i : i + CHUNK_SIZE])
+                
+                expected_n_k += cp.sum(r_ik_chunk, axis=0)
+                expected_sum_x += cp.dot(r_ik_chunk.T, X_chunk)
+                
+            return cp.asnumpy(expected_n_k), cp.asnumpy(expected_sum_x)
 
     def compute_sufficient_stats(
         self, X: np.ndarray, z: np.ndarray, K_max: int
     ) -> tuple[np.ndarray, np.ndarray]:
         """Compute cluster sizes and feature sums per cluster on GPU."""
-        X_gpu = cp.asarray(X)
-        z_gpu = cp.asarray(z)
+        CHUNK_SIZE = self._get_optimal_chunk_size(X.shape[1], K_max, X.dtype)
+        n_samples = X.shape[0]
 
-        n_k = cp.bincount(z_gpu, minlength=K_max)
-        sum_x = cp.zeros((K_max, X.shape[1]), dtype=X_gpu.dtype)
-        cp.add.at(sum_x, z_gpu, X_gpu)
+        if n_samples <= CHUNK_SIZE:
+            X_gpu = cp.asarray(X)
+            z_gpu = cp.asarray(z)
 
-        return cp.asnumpy(n_k), cp.asnumpy(sum_x)
+            n_k = cp.bincount(z_gpu, minlength=K_max)
+            sum_x = cp.zeros((K_max, X.shape[1]), dtype=X_gpu.dtype)
+            cp.add.at(sum_x, z_gpu, X_gpu)
+
+            return cp.asnumpy(n_k), cp.asnumpy(sum_x)
+        else:
+            n_k = cp.zeros(K_max, dtype=cp.int64)
+            sum_x = cp.zeros((K_max, X.shape[1]), dtype=X.dtype)
+            
+            for i in range(0, n_samples, CHUNK_SIZE):
+                X_chunk = cp.asarray(X[i : i + CHUNK_SIZE])
+                z_chunk = cp.asarray(z[i : i + CHUNK_SIZE])
+                
+                n_k += cp.bincount(z_chunk, minlength=K_max)
+                cp.add.at(sum_x, z_chunk, X_chunk)
+                
+            return cp.asnumpy(n_k), cp.asnumpy(sum_x)
 
     def sample_cluster_means(
         self,
