@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import math
 import warnings
 
@@ -192,6 +194,10 @@ def _sample_inverse_gaussian_cuda(mu_abs, lam, y_noise, u_noise, out_tau2):
 def _probe_numba_cuda() -> bool:
     """Test-link a trivial kernel to verify PTX/driver compatibility."""
     try:
+        from numba import cuda
+
+        if not cuda.is_available():
+            return False
 
         @cuda.jit
         def _noop(x):

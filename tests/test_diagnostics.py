@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 
 from bayesian_sparse_gmm.diagnostics import effective_sample_size, gelman_rubin

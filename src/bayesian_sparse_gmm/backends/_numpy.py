@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 
 from ..utils import sample_inverse_gaussian as utils_sample_inverse_gaussian

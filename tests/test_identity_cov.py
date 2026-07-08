@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Tests for Module 7: post-processing and evaluation alignment."""
 
 import numpy as np

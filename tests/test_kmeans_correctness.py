@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Correctness verification for CuPy KMeans CUDA optimization.
 

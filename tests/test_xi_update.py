@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 
 from bayesian_sparse_gmm.backends._numpy import NumpyBackend

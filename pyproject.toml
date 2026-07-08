@@ -7,7 +7,7 @@ name = "bayesian-sparse-gmm"
 dynamic = ["version"]
 description = "Bayesian Sparse Gaussian Mixture Model implementation in Python"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.8"
 license = { text = "MIT" }
 authors = [
     { name = "Nam Nam", email = "nampvh4436@gmail.com" }
@@ -23,6 +23,7 @@ dependencies = [
     "scipy>=1.7.0",
     "scikit-learn>=1.0.0",
     "tqdm>=4.60.0",
+    "numba>=0.53.0",
 ]
 
 [project.optional-dependencies]
@@ -47,7 +48,7 @@ packages = ["src/bayesian_sparse_gmm"]
 profile = "black"
 
 [tool.black]
-target-version = ["py39"]
+target-version = ["py38"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
