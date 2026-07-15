@@ -113,9 +113,41 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         self.random_state = random_state
         self.verbose = verbose
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        # Remove backend_ to allow safe cross-device loading
+        state.pop("backend_", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        # Re-initialize backend_ upon unpickling
+        if hasattr(self, "backend"):
+            new_backend = select_backend(self.backend)
+            self.backend_ = new_backend
+            # Warn when the effective backend changes (e.g. CUDA-trained model
+            # loaded in a non-CUDA environment). Predictions remain numerically
+            # correct because all stored arrays are numpy; this warning only
+            # signals a potential floating-point precision difference.
+            new_class = type(new_backend).__name__
+            fitted_class = getattr(self, "backend_class_", None)
+            if fitted_class is not None and new_class != fitted_class:
+                warnings.warn(
+                    f"Model was trained with {fitted_class} but is now running "
+                    f"with {new_class} (requested backend '{self.backend}' is "
+                    "unavailable in this environment). Predictions are "
+                    "functionally correct but may have minor floating-point "
+                    "differences on borderline cluster assignments.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
     def fit(self, X: np.ndarray, y: Any = None) -> "BayesianSparseGMM":
         """Fit the GMM model."""
         X = check_array(X, dtype=[np.float64, np.float32])
+        # Store training-set size so that predict_proba / score use a consistent
+        # threshold regardless of the test-batch size (fixes joblib round-trip drift).
+        self.n_train_ = X.shape[0]
 
         if self.optimizer not in ["default", "svi"]:
             raise ValueError("optimizer must be 'default' (MCMC) or 'svi'.")
@@ -156,6 +188,9 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         )
 
         self.backend_ = select_backend(self.backend)
+        # Remember the *effective* backend class name so __setstate__ can warn
+        # when the loaded environment resolves to a different backend.
+        self.backend_class_ = type(self.backend_).__name__
 
         if self.optimizer == "default":
             config = SamplerConfig(
@@ -215,10 +250,20 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
         return self
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        """Predict expected posterior probability of each cluster for each sample."""
+        """Predict expected posterior probability of each cluster for each sample.
+
+        Cluster mixing weights below ``1 / (2 * n_train)`` are treated as
+        effectively zero (hard-thresholded to 1e-300) before computing the
+        log-probabilities.  Using the *training* set size here — rather than
+        the test-batch size — ensures that predictions are identical regardless
+        of how many samples are passed at inference time (single-sample vs.
+        full-batch) and are stable after a joblib save/load round-trip.
+        """
         X = check_array(X, dtype=[np.float64, np.float32])
-        n = X.shape[0]
-        threshold = 1.0 / (2.0 * n)
+        # Use n_train_ (fixed at fit time) so threshold is invariant to test-
+        # batch size. Without this fix, predicting a single sample gives
+        # threshold=0.5, zeroing out almost all cluster weights.
+        threshold = 1.0 / (2.0 * self.n_train_)
 
         if self.optimizer == "default":
             check_is_fitted(self, "states_")
@@ -255,8 +300,10 @@ class BayesianSparseGMM(BaseEstimator, ClusterMixin):
     def score(self, X: np.ndarray, y: Any = None) -> float:
         """Compute the average GMM log-likelihood of the dataset."""
         X = check_array(X, dtype=[np.float64, np.float32])
-        n, p = X.shape
-        threshold = 1.0 / (2.0 * n)
+        _, p = X.shape
+        # Same fix as predict_proba: use n_train_ so the weight threshold is
+        # consistent regardless of how many samples are passed to score().
+        threshold = 1.0 / (2.0 * self.n_train_)
 
         if self.optimizer == "default":
             check_is_fitted(self, "states_")
