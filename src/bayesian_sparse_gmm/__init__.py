@@ -1,5 +1,5 @@
 from .model import BayesianSparseGMM
 
-__version__ = "0.4.0"
+__version__ = "0.4.2"
 
 __all__ = ["BayesianSparseGMM"]
