@@ -4,9 +4,10 @@ from ._base import ComputeBackend
 
 try:
     import cupy as cp
-
+    # Verify that the CUDA driver is sufficient and a device is available
+    cp.cuda.runtime.getDeviceCount()
     CUPY_AVAILABLE = True
-except ImportError:
+except Exception:
     CUPY_AVAILABLE = False
     cp = None
 
