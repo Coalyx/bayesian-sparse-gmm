@@ -20,7 +20,6 @@ from sklearn.datasets import make_blobs
 
 from bayesian_sparse_gmm.model import BayesianSparseGMM
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -333,7 +332,8 @@ class TestBackendChangeWarning:
             pickle.loads(pickle.dumps(loaded))
 
         backend_warnings = [
-            x for x in w
+            x
+            for x in w
             if issubclass(x.category, UserWarning) and "CUDABackend" in str(x.message)
         ]
         assert len(backend_warnings) >= 1, (
@@ -351,7 +351,8 @@ class TestBackendChangeWarning:
             _roundtrip_joblib(model)
 
         backend_warnings = [
-            x for x in w
+            x
+            for x in w
             if issubclass(x.category, UserWarning)
             and "backend" in str(x.message).lower()
         ]
